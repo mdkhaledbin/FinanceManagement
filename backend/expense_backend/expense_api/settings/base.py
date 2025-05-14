@@ -6,9 +6,7 @@ import environ
 # Set BASE_DIR to the root of your Django project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# 👇 Add your "apps/" folder to Python path
-sys.path.append(str(BASE_DIR / 'expense_api' / 'apps'))
-# Load environment variables from .env
+
 env = environ.Env(
     DEBUG=(bool, False)
 )
@@ -25,7 +23,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'llm',
+    'expense_api.apps.agent',
+    'expense_api.apps.llm',
     'rest_framework',
 ]
 

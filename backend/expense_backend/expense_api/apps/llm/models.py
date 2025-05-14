@@ -1,5 +1,4 @@
 from django.db import models
-import uuid
 
 class User(models.Model):
     id = models.AutoField(primary_key=True)    
@@ -7,7 +6,7 @@ class User(models.Model):
     email = models.EmailField(unique=True)
     # password_hash = models.CharField(max_length=255)
     # created_at = models.DateTimeField(auto_now_add=True)
-
+    
 class Category(models.Model):
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="categories")

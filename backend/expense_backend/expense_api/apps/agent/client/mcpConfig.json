@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+        "db_server": {
+            "command": "python",
+            "args": [
+                "/home/mehedi/Projects/FinanceManagement/backend/expense_backend/expense_api/apps/agent/servers/db_server.py"
+            ]
+        }
+    }
+}

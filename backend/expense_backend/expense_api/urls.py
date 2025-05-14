@@ -23,5 +23,5 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
     path('llm/', include('llm.urls')),   # Now 'include' will work
+    path('agent/', include('agent.urls'))
 ]
-
