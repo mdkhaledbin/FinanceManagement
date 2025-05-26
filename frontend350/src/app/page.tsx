@@ -1,23 +1,23 @@
-"use client";
-import MainContent from "@/components/MainContent";
-import SideBar from "@/components/SideBar";
-import ToggleChat from "@/components/ToggleChat";
-import { useState } from "react";
+import React from 'react';
+import Navbar from "@/components/landingPageComponents/Nabvar";
+import Hero from "@/components/landingPageComponents/Hero";
+import Features from "@/components/landingPageComponents/Features";
+import Benefits from "@/components/landingPageComponents/Benefits";
+import CTA from "@/components/landingPageComponents/CTA";
+import Footer from "@/components/landingPageComponents/Footer";
 
-const Page = () => {
-  const [showChatArea, setShowChatArea] = useState(false);
-  const handleShowChat = () => {
-    setShowChatArea(!showChatArea);
-  };
+
+const HomePage = () => {
   return (
-    <div className="flex">
-      <ToggleChat onToggle={handleShowChat} />
-      <SideBar />
-      <div className="flex-1">
-        <MainContent showChat={showChatArea} />
-      </div>
-    </div>
+    <main className="min-h-screen bg-white text-gray-800 font-sans antialiased">
+      <Navbar />
+      <Hero />
+      <Features />
+      <Benefits />
+      <CTA />
+      <Footer />
+    </main>
   );
 };
 
-export default Page;
+export default HomePage;
