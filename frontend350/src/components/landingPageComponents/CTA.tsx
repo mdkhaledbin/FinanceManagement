@@ -1,4 +1,3 @@
-// File: frontend/src/components/CTA.tsx
 import React from 'react';
 
 const CTA = () => {

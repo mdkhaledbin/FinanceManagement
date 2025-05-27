@@ -1,4 +1,3 @@
-// File: frontend/src/components/Features.tsx
 import React from 'react';
 import { TrendingUp, BookOpen, MessageSquare, Bell } from 'lucide-react';
 
