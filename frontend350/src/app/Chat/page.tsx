@@ -17,9 +17,9 @@ const Page = () => {
   return (
     <ThemeProvider>
       <div className="flex">
-        <Navbar />
+        <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
         <ToggleChat onToggle={handleShowChat} />
-        <SideBar isOpen={showSidebar} onClose={() => setShowSidebar(false)} />
+        <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
         <div className="flex-1">
           <MainContent showChat={showChatArea} />
         </div>

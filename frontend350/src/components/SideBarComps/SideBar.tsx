@@ -1,44 +1,116 @@
+// SideBar.jsx
 import { getTableData } from "@/data/table";
-import React from "react";
+import React, { useReducer } from "react";
 import SideBarEntries from "./SideBarEntries";
 import { useTheme } from "@/context/ThemeProvider";
+import { TableReducer } from "@/reducers/TableReducer";
 
-const SideBar = () => {
-  const tablesData = getTableData("1");
+interface SideBarProps {
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+}
+
+const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
+  const [tablesData, dispatchTablesData] = useReducer(
+    TableReducer,
+    getTableData("1")
+  );
   const { theme } = useTheme();
 
+  const handleTableEdit = (id: number, name: string) => {
+    dispatchTablesData({
+      type: "EDIT",
+      payload: {
+        id: id,
+        table_name: name,
+      },
+    });
+  };
+  const handleTableShare = (id: number) => {
+    dispatchTablesData({
+      type: "SHARE",
+      payload: {
+        id: id,
+      },
+    });
+  };
+  const handleTableDelete = (id: number) => {
+    dispatchTablesData({
+      type: "DELETE",
+      payload: {
+        id: id,
+      },
+    });
+  };
+
   return (
-    <div
-      className={`h-screen pt-[10vh] pl-[1.5vw] w-[20vw] flex flex-col ${
-        theme === "dark" ? "bg-gray-900" : "bg-gray-50"
-      } transition-all duration-300 ease-in-out fixed md:relative`}
-    >
-      <h1
-        className={`text-3xl font-bold mb-4 px-2 ${
-          theme === "dark" ? "text-white" : "text-gray-900"
-        }`}
-      >
-        SideBar
-      </h1>
-
-      <div className="relative flex-1 overflow-hidden">
-        {/* Scrollable content area */}
-        <div className={`h-full overflow-y-auto pr-[1vw] scrollbar-custom`}>
-          {tablesData.map((table) => (
-            <SideBarEntries key={table.id} table={table} />
-          ))}
-        </div>
-
-        {/* Bottom fade effect - only shows when scrolled */}
+    <>
+      {/* Overlay for mobile */}
+      {isOpen && (
         <div
-          className={`sticky bottom-0 left-0 right-0 h-6 ${
-            theme === "dark"
-              ? "bg-gradient-to-t from-gray-900 to-transparent"
-              : "bg-gradient-to-t from-gray-50 to-transparent"
-          } pointer-events-none`}
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsOpen(false)}
         />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={`
+        ${
+          // Mobile styles
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }
+        fixed lg:relative z-40
+        h-screen pt-16 lg:pt-[10vh] 
+        px-3 sm:px-4 lg:pl-[1.5vw] lg:pr-0
+        w-[280px] sm:w-[320px] lg:w-[20vw] xl:w-[18vw] 2xl:w-[16vw]
+        flex flex-col
+        ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"} 
+        transition-all duration-300 ease-in-out
+        border-r ${theme === "dark" ? "border-gray-800" : "border-gray-200"}
+        `}
+      >
+        <h1
+          className={`text-center text-xs sm:text-sm italic mb-4 sm:mb-6 px-2 py-2 border-b ${
+            theme === "dark"
+              ? "text-gray-300 border-gray-700"
+              : "text-gray-700 border-gray-200"
+          }`}
+        >
+          Manage Yourself
+        </h1>
+
+        {/* Modified scroll container */}
+        <div className="relative flex-1">
+          <div
+            className={`h-full overflow-y-auto pr-2 sm:pr-4 lg:pr-[1vw] scrollbar-custom`}
+            style={{
+              // This ensures dropdowns can escape the scroll container
+              overflow: "auto",
+            }}
+          >
+            {tablesData.map((table) => (
+              <SideBarEntries
+                key={table.id}
+                table={table}
+                onEdit={handleTableEdit}
+                onDelete={handleTableDelete}
+                onShare={handleTableShare}
+              />
+            ))}
+          </div>
+
+          {/* Bottom fade effect */}
+          <div
+            className={`sticky bottom-0 left-0 right-0 h-4 sm:h-6 ${
+              theme === "dark"
+                ? "bg-gradient-to-t from-gray-900 to-transparent"
+                : "bg-gradient-to-t from-gray-50 to-transparent"
+            } pointer-events-none`}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
