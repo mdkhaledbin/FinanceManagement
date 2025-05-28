@@ -6,11 +6,13 @@ export type ThemeMode = "light" | "dark";
 export interface ThemeType {
   theme: ThemeMode;
   setTheme: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
 const initialTheme: ThemeType = {
   theme: "light",
   setTheme: () => {},
+  toggleTheme: () => {},
 };
 
 export const ThemeContext = createContext<ThemeType>(initialTheme);
@@ -20,8 +22,12 @@ import { ReactNode } from "react";
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<ThemeMode>("light");
 
+  const toggleTheme = () => {
+    setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"));
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
