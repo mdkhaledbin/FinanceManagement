@@ -26,7 +26,7 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
       {isOpen ? (
         <div className="flex justify-between">
           <div
-            className={`mr-10 w-32 md:w-40 lg:w-48 transition-transform hover:scale-105 ${
+            className={`mr-12 w-32 md:w-40 lg:w-48 transition-transform hover:scale-105 ${
               isOpen ? "mx-auto" : ""
             }`}
           >
@@ -41,7 +41,7 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
           </div>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`ml-10 p-2 rounded-lg transition-all duration-300 lg:hidden ${
+            className={`ml-12 p-2 rounded-lg transition-all duration-300 lg:hidden ${
               theme === "dark"
                 ? "bg-gray-800 text-white hover:bg-gray-700"
                 : "bg-gray-50 text-gray-900 hover:bg-gray-100"

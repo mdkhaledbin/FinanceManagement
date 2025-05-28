@@ -224,15 +224,9 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             theme === "dark"
               ? "text-gray-400 group-hover:text-gray-300"
               : "text-gray-500 group-hover:text-gray-600"
-          }
-          max-w-[80px] xs:max-w-[100px] sm:max-w-[120px]`}
+          } max-w-[80px] xs:max-w-[100px] sm:max-w-[120px]`}
         >
-          {table.description && table.description.length > 20
-            ? `${table.description.slice(
-                0,
-                window.innerWidth < 640 ? 10 : 14
-              )}...`
-            : table.description || "\u00A0"}
+          {table.description || "\u00A0"}
         </p>
         <p
           className={`text-xs transition-colors duration-200 flex-shrink-0 ${

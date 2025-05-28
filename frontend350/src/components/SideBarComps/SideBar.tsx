@@ -81,13 +81,9 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
         </h1>
 
         {/* Modified scroll container */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 h-full max-h-screen">
           <div
             className={`h-full overflow-y-auto pr-2 sm:pr-4 lg:pr-[1vw] scrollbar-custom`}
-            style={{
-              // This ensures dropdowns can escape the scroll container
-              overflow: "auto",
-            }}
           >
             {tablesData.map((table) => (
               <SideBarEntries
