@@ -1,6 +1,6 @@
 // SideBar.jsx
 import { getTableData } from "@/data/table";
-import React, { useReducer } from "react";
+import React, { useReducer, useState } from "react";
 import SideBarEntries from "./SideBarEntries";
 import { useTheme } from "@/context/ThemeProvider";
 import { TableReducer } from "@/reducers/TableReducer";
@@ -15,6 +15,7 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
     TableReducer,
     getTableData("1")
   );
+  const [activeEntryId, setActiveEntryId] = useState<number | null>(null);
   const { theme } = useTheme();
 
   const handleTableEdit = (id: number, name: string) => {
@@ -56,18 +57,17 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
       {/* Sidebar */}
       <div
         className={`
-        ${
-          // Mobile styles
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }
-        fixed lg:relative z-40
-        h-screen pt-18 lg:pt-[10vh] 
-        px-3 sm:px-4 lg:pl-[1.5vw] lg:pr-0
-        w-[280px] sm:w-[320px] lg:w-[20vw] xl:w-[18vw] 2xl:w-[16vw]
-        flex flex-col
-        ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"} 
-        transition-all duration-300 ease-in-out
-        border-r ${theme === "dark" ? "border-gray-800" : "border-gray-200"}
+          ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          fixed lg:relative z-40 // This is good
+          h-screen pt-18 lg:pt-[10vh] 
+          px-3 sm:px-4 lg:pl-[1.5vw] lg:pr-0
+          w-[280px] sm:w-[320px] lg:w-[20vw] xl:w-[18vw] 2xl:w-[16vw]
+          flex flex-col
+          ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"} 
+          transition-all duration-300 ease-in-out
+          border-r ${
+            theme === "dark" ? "border-gray-800" : "border-gray-200"
+          } overflow-y-auto
         `}
       >
         <h1
@@ -80,10 +80,9 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
           Manage Yourself
         </h1>
 
-        {/* Modified scroll container */}
         <div className="relative flex-1 h-full max-h-screen">
           <div
-            className={`h-full overflow-y-auto pr-2 sm:pr-4 lg:pr-[1vw] scrollbar-custom`}
+            className={`h-full pr-2 sm:pr-4 lg:pr-[1vw] scrollbar-custom pb-20`}
           >
             {tablesData.map((table) => (
               <SideBarEntries
@@ -92,6 +91,8 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
                 onEdit={handleTableEdit}
                 onDelete={handleTableDelete}
                 onShare={handleTableShare}
+                isActive={activeEntryId === table.id}
+                onSetActive={setActiveEntryId}
               />
             ))}
           </div>

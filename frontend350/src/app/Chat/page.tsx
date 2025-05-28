@@ -16,7 +16,7 @@ const Page = () => {
 
   return (
     <ThemeProvider>
-      <div className="flex">
+      <div className="flex overflow-hidden">
         <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
         <ToggleChat onToggle={handleShowChat} />
         <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
