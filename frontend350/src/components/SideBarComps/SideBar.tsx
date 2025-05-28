@@ -61,7 +61,7 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }
         fixed lg:relative z-40
-        h-screen pt-16 lg:pt-[10vh] 
+        h-screen pt-18 lg:pt-[10vh] 
         px-3 sm:px-4 lg:pl-[1.5vw] lg:pr-0
         w-[280px] sm:w-[320px] lg:w-[20vw] xl:w-[18vw] 2xl:w-[16vw]
         flex flex-col
