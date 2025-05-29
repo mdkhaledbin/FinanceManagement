@@ -23,7 +23,7 @@ export const TableReducer = (
 
     case "SHARE": {
       console.log("Share logic will implement later.");
-      return tables; // Return unchanged state
+      return [...tables]; // Return unchanged state
     }
 
     case "DELETE": {
@@ -31,6 +31,6 @@ export const TableReducer = (
     }
 
     default:
-      return tables; // Fallback for unrecognized action
+      return [...tables]; // Fallback for unrecognized action
   }
 };

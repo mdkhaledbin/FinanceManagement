@@ -4,14 +4,13 @@ import { SlOptionsVertical } from "react-icons/sl";
 import { TableDataType } from "@/data/table";
 import { useTheme } from "@/context/ThemeProvider";
 import { createPortal } from "react-dom";
+import { useSelectedTable } from "@/context/SelectedTableProvider";
 
 interface SideBarEntriesProps {
   table: TableDataType;
   onEdit: (id: number, name: string) => void;
   onDelete: (id: number) => void;
   onShare: (id: number) => void;
-  isActive: boolean; // New prop to control active state
-  onSetActive: (id: number | null) => void; // New prop to set active state
 }
 
 const SideBarEntries: React.FC<SideBarEntriesProps> = ({
@@ -19,15 +18,21 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
   onEdit,
   onDelete,
   onShare,
-  isActive,
-  onSetActive,
 }) => {
   const { theme } = useTheme();
+  const { selectedTable, setSelectedTable } = useSelectedTable();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(table.table_name);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [showDropDown, setShowDropDown] = useState(false);
+
+  const handleSelectTable = (tableId: number | null) => {
+    console.log(`Selected table ${tableId}`);
+    setSelectedTable(tableId);
+  };
 
   const handleClickOutside = React.useCallback(
     (event: MouseEvent) => {
@@ -38,14 +43,13 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         !buttonRef.current.contains(event.target as Node)
       ) {
         if (isEditing) {
-          // If editing, save changes (same as pressing Enter)
           onEdit(table.id, editedName);
         }
-        onSetActive(null);
+        setShowDropDown(false);
         setIsEditing(false);
       }
     },
-    [isEditing, onEdit, table.id, editedName, onSetActive]
+    [isEditing, onEdit, table.id, editedName]
   );
 
   useEffect(() => {
@@ -54,31 +58,6 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [handleClickOutside]);
-
-  const handleEditClick = () => {
-    setIsEditing(true);
-    onSetActive(null);
-  };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditedName(e.target.value);
-  };
-
-  const handleNameBlur = () => {
-    onEdit(table.id, editedName);
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    id: number,
-    name: string
-  ) => {
-    if (e.key === "Enter") {
-      onEdit(id, name);
-      setIsEditing(false);
-    }
-  };
 
   const calculateDropdownPosition = () => {
     if (buttonRef.current) {
@@ -99,30 +78,23 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
     e.stopPropagation();
     e.preventDefault();
 
-    if (isActive) {
-      onSetActive(null);
-    } else {
+    setShowDropDown(!showDropDown);
+    if (!showDropDown) {
       calculateDropdownPosition();
-      onSetActive(table.id);
     }
   };
-
-  const handleEntryClick = () => {
-    onSetActive(table.id);
-  };
-  const isDropdownOpen = isActive;
 
   // Update position on scroll
   useEffect(() => {
     const handleScroll = () => {
-      if (isDropdownOpen) {
+      if (showDropDown) {
         calculateDropdownPosition();
       }
     };
 
     window.addEventListener("scroll", handleScroll, true);
     return () => window.removeEventListener("scroll", handleScroll, true);
-  }, [isDropdownOpen]);
+  }, [showDropDown]);
 
   return (
     <div
@@ -130,10 +102,10 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         cursor-pointer group 
         ${
           theme === "dark"
-            ? isActive
+            ? selectedTable === table.id
               ? "bg-gradient-to-br from-gray-700/80 to-gray-800/90 border-gray-600/50"
               : "bg-gradient-to-br from-gray-800/80 to-gray-900/90 hover:from-gray-700/80 hover:to-gray-800/90 border-gray-700/50"
-            : isActive
+            : selectedTable === table.id
             ? "bg-gradient-to-br from-gray-100 to-gray-50 border-gray-300"
             : "bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 border-gray-200"
         }
@@ -145,10 +117,11 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         relative overflow-hidden
         after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent
         after:-translate-x-full ${
-          isActive
+          selectedTable === table.id
             ? "after:translate-x-full"
             : "group-hover:after:translate-x-full"
         } after:transition-transform after:duration-500`}
+      onClick={() => handleSelectTable(table.id)}
     >
       {/* Glossy overlay effect */}
       <div className="absolute inset-0 pointer-events-none">
@@ -164,9 +137,17 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
           <input
             type="text"
             value={editedName}
-            onChange={handleNameChange}
-            onBlur={handleNameBlur}
-            onKeyDown={(e) => handleKeyDown(e, table.id, editedName)}
+            onChange={(e) => setEditedName(e.target.value)}
+            onBlur={() => {
+              onEdit(table.id, editedName);
+              setIsEditing(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onEdit(table.id, editedName);
+                setIsEditing(false);
+              }
+            }}
             autoFocus
             className={`bg-transparent border-b ${
               theme === "dark"
@@ -215,10 +196,11 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             ref={buttonRef}
             onClick={(e) => {
               handleDropdownToggle(e);
-              handleEntryClick();
             }}
             className={`p-0.5 sm:p-1 rounded-md sm:rounded-lg transition-all duration-200 ${
-              isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              selectedTable === table.id
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100"
             } 
             ${
               theme === "dark"
@@ -226,7 +208,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
             }
             transform ${
-              isActive
+              selectedTable === table.id
                 ? "translate-x-0"
                 : "translate-x-1 group-hover:translate-x-0"
             }
@@ -235,7 +217,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             <SlOptionsVertical size={12} className="sm:w-3.5 sm:h-3.5" />
           </button>
 
-          {isDropdownOpen &&
+          {showDropDown &&
             createPortal(
               <div
                 ref={dropdownRef}
@@ -251,8 +233,10 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
               >
                 <div className="py-1">
                   <button
-                    onClick={() => {
-                      handleEditClick();
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditing(true);
+                      setShowDropDown(false);
                     }}
                     className={`block w-full text-left px-4 py-2 text-sm ${
                       theme === "dark"
@@ -263,9 +247,10 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
                     Edit
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onShare(table.id);
-                      onSetActive(null);
+                      setShowDropDown(false);
                     }}
                     className={`block w-full text-left px-4 py-2 text-sm ${
                       theme === "dark"
@@ -276,9 +261,11 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
                     Share
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onDelete(table.id);
-                      onSetActive(null);
+                      setShowDropDown(false);
+                      if (selectedTable === table.id) handleSelectTable(null);
                     }}
                     className={`block w-full text-left px-4 py-2 text-sm ${
                       theme === "dark"

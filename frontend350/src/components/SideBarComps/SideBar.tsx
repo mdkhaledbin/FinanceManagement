@@ -1,6 +1,6 @@
 // SideBar.jsx
 import { getTableData } from "@/data/table";
-import React, { useReducer, useState } from "react";
+import React, { useReducer } from "react";
 import SideBarEntries from "./SideBarEntries";
 import { useTheme } from "@/context/ThemeProvider";
 import { TableReducer } from "@/reducers/TableReducer";
@@ -15,7 +15,6 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
     TableReducer,
     getTableData("1")
   );
-  const [activeEntryId, setActiveEntryId] = useState<number | null>(null);
   const { theme } = useTheme();
 
   const handleTableEdit = (id: number, name: string) => {
@@ -91,8 +90,6 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
                 onEdit={handleTableEdit}
                 onDelete={handleTableDelete}
                 onShare={handleTableShare}
-                isActive={activeEntryId === table.id}
-                onSetActive={setActiveEntryId}
               />
             ))}
           </div>
