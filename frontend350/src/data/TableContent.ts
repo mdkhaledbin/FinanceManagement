@@ -318,7 +318,8 @@ const jsonTableData: JsonTableData = [
   },
 ];
 
-const getTableContents = (tableId: number) => {
+const getTableContents = (tableId: number | null) => {
+  if (tableId === null) return [];
   return jsonTableData.filter((table) => table.id === tableId);
 };
 
