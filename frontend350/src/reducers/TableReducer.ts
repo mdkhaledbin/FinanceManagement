@@ -1,23 +1,47 @@
 import { TableDataType } from "@/data/table";
-type Action =
+export type TableDataAction =
   | { type: "EDIT"; payload: { id: number; table_name: string } }
   | { type: "SHARE"; payload: { id: number } } // Even if not used yet, add payload for future consistency
-  | { type: "DELETE"; payload: { id: number } };
+  | { type: "DELETE"; payload: { id: number } }
+  | {
+      type: "ADD_TABLE";
+      payload: { id: number; table_name: string; description: string };
+    };
 
 export const TableReducer = (
   tables: TableDataType[],
-  action: Action
+  action: TableDataAction
 ): TableDataType[] => {
   switch (action.type) {
+    case "ADD_TABLE": {
+      return [
+        ...tables,
+        {
+          id: action.payload.id,
+          table_name: action.payload.table_name,
+          user_id: "1",
+          created_at: new Date().toISOString(),
+          modified_at: new Date().toISOString(),
+          description: action.payload.description,
+          pendingCount: 0,
+        },
+      ].sort(
+        (a, b) =>
+          new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime()
+      );
+    }
     case "EDIT": {
       return tables.map((table) =>
         table.id === action.payload.id
           ? {
               ...table,
               table_name: action.payload.table_name,
-              modified_at: Date.now().toString(),
+              modified_at:  new Date().toISOString(),
             }
           : table
+      ).sort(
+        (a, b) =>
+          new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime()
       );
     }
 

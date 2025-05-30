@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@import "../components/SideBarComps/CreateTableModal.css";
+
 .scrollbar-custom::-webkit-scrollbar {
   width: 8px;
 }

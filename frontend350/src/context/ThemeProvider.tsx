@@ -10,7 +10,7 @@ export interface ThemeType {
 }
 
 const initialTheme: ThemeType = {
-  theme: "light",
+  theme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
 };
@@ -20,7 +20,7 @@ export const ThemeContext = createContext<ThemeType>(initialTheme);
 import { ReactNode } from "react";
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [theme, setTheme] = useState<ThemeMode>("dark");
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"));

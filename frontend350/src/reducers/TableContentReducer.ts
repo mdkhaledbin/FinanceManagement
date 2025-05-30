@@ -1,0 +1,120 @@
+import { TableRow, TableData, JsonTableItem } from "../data/TableContent";
+
+export type JsonTableAction =
+  | { type: "ADD_TABLE"; payload: { id: number; data: TableData } }
+  | { type: "ADD_ROW"; payload: { tableId: number; row: TableRow } }
+  | {
+      type: "EDIT_ROW";
+      payload: {
+        tableId: number;
+        rowId: number | string;
+        newRow: Partial<TableRow>;
+      };
+    }
+  | { type: "DELETE_ROW"; payload: { tableId: number; rowId: number | string } }
+  | {
+      type: "EDIT_TABLE_HEADERS";
+      payload: { tableId: number; headers: string[] };
+    }
+  | { type: "DELETE_TABLE"; payload: { tableId: number } };
+
+export function jsonTableReducer(
+  state: JsonTableItem[],
+  action: JsonTableAction
+): JsonTableItem[] {
+  switch (action.type) {
+    case "ADD_TABLE": {
+      // console.log(`Table added to the TableContent`);
+      const { id, data } = action.payload;
+      return [...state, { id, data }];
+    }
+
+    case "ADD_ROW": {
+      const { tableId, row } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              rows: [...table.data.rows, row],
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "EDIT_ROW": {
+      const { tableId, rowId, newRow } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              rows: table.data.rows.map((row) => {
+                if (row.id === rowId) {
+                  // Create a new object with the updated properties
+                  const updatedRow: TableRow = { ...row };
+                  for (const key in newRow) {
+                    if (newRow[key] !== undefined) {
+                      updatedRow[key] = newRow[key] as
+                        | string
+                        | number
+                        | boolean
+                        | null;
+                    }
+                  }
+                  return updatedRow;
+                }
+                return row;
+              }),
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "DELETE_ROW": {
+      const { tableId, rowId } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              rows: table.data.rows.filter((row) => row.id !== rowId),
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "EDIT_TABLE_HEADERS": {
+      const { tableId, headers } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers,
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "DELETE_TABLE": {
+      const { tableId } = action.payload;
+      return state.filter((table) => table.id !== tableId);
+    }
+
+    default:
+      return state;
+  }
+}
