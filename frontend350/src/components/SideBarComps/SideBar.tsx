@@ -1,9 +1,9 @@
 // SideBar.jsx
-import { getTableData } from "@/data/table";
-import React, { useReducer } from "react";
+import React from "react";
 import SideBarEntries from "./SideBarEntries";
 import { useTheme } from "@/context/ThemeProvider";
-import { TableReducer } from "@/reducers/TableReducer";
+import { useTablesData } from "@/context/DataProvider";
+import CreateTableButton from "./CreateTableButton";
 
 interface SideBarProps {
   isOpen: boolean;
@@ -11,10 +11,7 @@ interface SideBarProps {
 }
 
 const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
-  const [tablesData, dispatchTablesData] = useReducer(
-    TableReducer,
-    getTableData("1")
-  );
+  const { tablesData, dispatchTablesData } = useTablesData();
   const { theme } = useTheme();
 
   const handleTableEdit = (id: number, name: string) => {
@@ -76,7 +73,8 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
               : "text-gray-700 border-gray-200"
           }`}
         >
-          Manage Yourself
+          <CreateTableButton />
+          {/* Manage YourSelf */}
         </h1>
 
         <div className="relative flex-1 h-full max-h-screen">

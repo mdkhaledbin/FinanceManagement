@@ -3,6 +3,7 @@ import MainContent from "@/components/MainContent";
 import Navbar from "@/components/Navbar";
 import SideBar from "@/components/SideBarComps/SideBar";
 import ToggleChat from "@/components/ToggleChat";
+import { DataProvider } from "@/context/DataProvider";
 import { SelectedTableProvider } from "@/context/SelectedTableProvider";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { useState } from "react";
@@ -17,16 +18,18 @@ const Page = () => {
 
   return (
     <ThemeProvider>
-      <SelectedTableProvider>
-        <div className="flex overflow-hidden">
-          <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-          <ToggleChat onToggle={handleShowChat} />
-          <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-          <div className="flex-1">
-            <MainContent showChat={showChatArea} />
+      <DataProvider>
+        <SelectedTableProvider>
+          <div className="flex overflow-hidden">
+            <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+            <ToggleChat onToggle={handleShowChat} />
+            <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+            <div className="flex-1">
+              <MainContent showChat={showChatArea} />
+            </div>
           </div>
-        </div>
-      </SelectedTableProvider>
+        </SelectedTableProvider>
+      </DataProvider>
     </ThemeProvider>
   );
 };

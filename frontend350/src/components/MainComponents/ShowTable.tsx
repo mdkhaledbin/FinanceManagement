@@ -1,9 +1,10 @@
+import { useTablesContent } from "@/context/DataProvider";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
-import { getTableContents } from "@/data/TableContent";
 import React from "react";
 
 const ShowTable = () => {
   const { selectedTable } = useSelectedTable();
+  const { getTableContents } = useTablesContent();
   const TableContent = getTableContents(selectedTable);
 
   if (TableContent.length === 0) {
@@ -52,6 +53,5 @@ const ShowTable = () => {
     </div>
   );
 };
-
 
 export default ShowTable;

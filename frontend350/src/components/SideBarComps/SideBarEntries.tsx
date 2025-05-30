@@ -1,4 +1,5 @@
 // SideBarEntries.jsx
+"use client"
 import React, { useState, useRef, useEffect } from "react";
 import { SlOptionsVertical } from "react-icons/sl";
 import { TableDataType } from "@/data/table";
