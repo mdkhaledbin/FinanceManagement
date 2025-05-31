@@ -7,6 +7,7 @@ import { ReactNode, useReducer, createContext, useContext } from "react";
 interface TablesDataContextType {
   tablesData: TableDataType[];
   dispatchTablesData: React.Dispatch<TableDataAction>;
+  getTableData: (tableId: number | null) => TableDataType[];
 }
 
 const initialTablesData: TableDataType[] = getTableData("1");
@@ -31,9 +32,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         if (tableId === null) return [];
         return tablesContent.filter(table => table.id === tableId)
     };
+  
+  const getTableData = (tableId: number | null) => {
+        if (tableId === null) return [];
+        return tablesData.filter(table => table.id === tableId)
+    };
 
   return (
-    <TablesDataContext.Provider value={{ tablesData, dispatchTablesData }}>
+    <TablesDataContext.Provider value={{ tablesData, getTableData, dispatchTablesData }}>
         <TablesContentContext.Provider value={{tablesContent, dispatchtablesContent, getTableContents}}>
       {children}
       </TablesContentContext.Provider>

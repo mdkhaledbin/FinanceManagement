@@ -16,7 +16,8 @@ export type JsonTableAction =
       type: "EDIT_TABLE_HEADERS";
       payload: { tableId: number; headers: string[] };
     }
-  | { type: "DELETE_TABLE"; payload: { tableId: number } };
+  | { type: "DELETE_TABLE"; payload: { tableId: number } }
+  | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } };
 
 export function jsonTableReducer(
   state: JsonTableItem[],
@@ -24,11 +25,14 @@ export function jsonTableReducer(
 ): JsonTableItem[] {
   switch (action.type) {
     case "ADD_TABLE": {
-      // console.log(`Table added to the TableContent`);
-      const { id, data } = action.payload;
-      return [...state, { id, data }];
+      return [
+        ...state,
+        {
+          id: action.payload.id,
+          data: action.payload.data,
+        },
+      ];
     }
-
     case "ADD_ROW": {
       const { tableId, row } = action.payload;
       return state.map((table) => {
@@ -38,6 +42,25 @@ export function jsonTableReducer(
             data: {
               ...table.data,
               rows: [...table.data.rows, row],
+            },
+          };
+        }
+        return table;
+      });
+    }
+    case "ADD_COLUMN": {
+      const { tableId, header } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers: [...table.data.headers, header],
+              rows: table.data.rows.map((row) => ({
+                ...row,
+                [header]: "",
+              })),
             },
           };
         }

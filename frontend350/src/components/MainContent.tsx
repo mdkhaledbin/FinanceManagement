@@ -1,23 +1,52 @@
 import React from "react";
 import ChatArea from "./ChatArea";
 import ShowTable from "./MainComponents/ShowTable";
+import { useTheme } from "@/context/ThemeProvider";
 
 const MainContent = ({ showChat }: { showChat: boolean }) => {
+  const { theme } = useTheme();
+
   return (
-    <div className={`flex text-center h-[100vh] flex-1 w-full bg-amber-200`}>
-      {showChat ? (
-        <>
-          <div className="w-3/5 pt-[10vh]">
+    <div
+      className={`flex flex-col lg:flex-row h-screen w-full ${
+        theme === "dark" ? "bg-gray-900" : "bg-gray-100"
+      } transition-colors duration-300 overflow-hidden`}
+    >
+      {/* Main Table Area */}
+      <div
+        className={`${
+          showChat ? "lg:w-3/5" : "w-full"
+        } h-full overflow-hidden pt-[5vh]`}
+      >
+        <div className="h-full flex flex-col">
+          <div className="py-6 lg:py-10 h-full overflow-hidden">
             <ShowTable />
           </div>
-          <div className="w-2/5">
-            <ChatArea />
+        </div>
+      </div>
+
+      {/* Chat Area - conditionally rendered and responsive */}
+      {showChat && (
+        <>
+          {/* Mobile overlay backdrop */}
+          <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-0" />
+
+          <div
+            className={`fixed lg:relative inset-0 lg:inset-auto lg:w-2/5 z-10 ${
+              theme === "dark" ? "bg-gray-800" : "bg-white"
+            } shadow-xl lg:shadow-none transition-all duration-300 transform ${
+              showChat ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            <div
+              className={`h-full flex flex-col border-l ${
+                theme === "dark" ? "border-gray-700" : "border-gray-200"
+              }`}
+            >
+              <ChatArea />
+            </div>
           </div>
         </>
-      ) : (
-        <div className="w-full pt-[10vh]">
-          <ShowTable />
-        </div>
       )}
     </div>
   );

@@ -4,19 +4,19 @@ import CreateTableModal from "./CreateTableModal";
 const CreateTableButton: React.FC = () => {
   const [showTableCreateModal, setShowTableCreateModal] = useState<boolean>(false);
 
-  const handleCloseModal = () => {
+  const handleToggleModal = () => {
     console.log(`Modal Closed`);
     setShowTableCreateModal(!showTableCreateModal)
   };
 
   return (
     <>
-      <button onClick={handleCloseModal}>
+      <button onClick={handleToggleModal}>
         Create Table
       </button>
 
       {showTableCreateModal && (
-        <CreateTableModal onCloseModal={handleCloseModal} />
+        <CreateTableModal onCloseModal={handleToggleModal} />
       )}
     </>
   );

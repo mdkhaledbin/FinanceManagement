@@ -24,7 +24,7 @@ const Page = () => {
             <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
             <ToggleChat onToggle={handleShowChat} />
             <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-            <div className="flex-1">
+            <div className="flex-1 overflow-x-auto">
               <MainContent showChat={showChatArea} />
             </div>
           </div>
