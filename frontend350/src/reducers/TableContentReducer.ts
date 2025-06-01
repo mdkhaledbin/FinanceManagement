@@ -17,13 +17,17 @@ export type JsonTableAction =
       payload: { tableId: number; headers: string[] };
     }
   | { type: "DELETE_TABLE"; payload: { tableId: number } }
-  | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } };
+  | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } }
+  | { type: "SET_TABLES"; payload: JsonTableItem[] };
 
 export function jsonTableReducer(
   state: JsonTableItem[],
   action: JsonTableAction
 ): JsonTableItem[] {
   switch (action.type) {
+    case "SET_TABLES": {
+      return [...action.payload];
+    }
     case "ADD_TABLE": {
       return [
         ...state,

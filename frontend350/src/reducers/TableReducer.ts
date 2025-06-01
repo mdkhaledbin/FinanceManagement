@@ -3,6 +3,7 @@ export type TableDataAction =
   | { type: "EDIT"; payload: { id: number; table_name: string } }
   | { type: "SHARE"; payload: { id: number } } // Even if not used yet, add payload for future consistency
   | { type: "DELETE"; payload: { id: number } }
+  | { type: "SET_TABLES"; payload: TableDataType[] }
   | {
       type: "ADD_TABLE";
       payload: { id: number; table_name: string; description: string };
@@ -13,6 +14,9 @@ export const TableReducer = (
   action: TableDataAction
 ): TableDataType[] => {
   switch (action.type) {
+    case "SET_TABLES": {
+      return [...action.payload];
+    }
     case "ADD_TABLE": {
       return [
         ...tables,
@@ -31,18 +35,21 @@ export const TableReducer = (
       );
     }
     case "EDIT": {
-      return tables.map((table) =>
-        table.id === action.payload.id
-          ? {
-              ...table,
-              table_name: action.payload.table_name,
-              modified_at:  new Date().toISOString(),
-            }
-          : table
-      ).sort(
-        (a, b) =>
-          new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime()
-      );
+      return tables
+        .map((table) =>
+          table.id === action.payload.id
+            ? {
+                ...table,
+                table_name: action.payload.table_name,
+                modified_at: new Date().toISOString(),
+              }
+            : table
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.modified_at).getTime() -
+            new Date(a.modified_at).getTime()
+        );
     }
 
     case "SHARE": {
