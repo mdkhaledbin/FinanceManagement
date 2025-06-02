@@ -2,19 +2,12 @@ import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/context/ThemeProvider";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css"; // Modern, clean dark theme
+import { ChatMessage } from "@/data/ChatMessages";
 
-type Message = {
-  id: string;
-  text: string;
-  sender: "user" | "bot";
-  timestamp: Date;
-  isTyping?: boolean;
-  displayedText?: string;
-};
 
 const ChatArea = () => {
   const { theme } = useTheme();
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "1",
       text: "Hello! How can I help you today?",
@@ -162,7 +155,7 @@ const ChatArea = () => {
     if (inputValue.trim() === "") return;
 
     // Add user message
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       text: inputValue,
       sender: "user",
@@ -208,7 +201,7 @@ Let me know if you'd like me to explain any part of this data or if you need it 
 
     const botMessageText =
       botResponses[Math.floor(Math.random() * botResponses.length)];
-    const botMessage: Message = {
+    const botMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       text: botMessageText,
       sender: "bot",

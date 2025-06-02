@@ -1,5 +1,5 @@
 import React from "react";
-import ChatArea from "./ChatArea";
+import ChatArea from "./chat/ChatArea"; //use ChatAreaReal after integration of Api
 import ShowTable from "./MainComponents/ShowTable";
 import { useTheme } from "@/context/ThemeProvider";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
