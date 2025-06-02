@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from asgiref.sync import async_to_sync
 from .serializers import QuerySerializer, ResponseSerializer
-from agent.client.client import ExpenseMCPClient
+from .client.client import ExpenseMCPClient
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentAPIView(APIView):

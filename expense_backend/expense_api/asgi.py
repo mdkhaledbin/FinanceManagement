@@ -8,6 +8,11 @@ https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
 """
 
 import os
+import environ  # ✅ add this line
+
+# Initialize environment variables
+env = environ.Env()
+environ.Env.read_env()  # Reads from .env file
 
 from django.core.asgi import get_asgi_application
 

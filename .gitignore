@@ -2,12 +2,6 @@
 *.pyc
 __pycache__/
 
-# Django
-*.sqlite3
-.env
-/staticfiles/
-/mediafiles/
-
 # VSCode
 .vscode/
 
