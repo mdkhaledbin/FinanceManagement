@@ -2,9 +2,11 @@ import React from "react";
 import ChatArea from "./ChatArea";
 import ShowTable from "./MainComponents/ShowTable";
 import { useTheme } from "@/context/ThemeProvider";
+import { useSelectedTable } from "@/context/SelectedTableProvider";
 
 const MainContent = ({ showChat }: { showChat: boolean }) => {
   const { theme } = useTheme();
+  const { selectedTable } = useSelectedTable();
 
   return (
     <div
@@ -20,7 +22,7 @@ const MainContent = ({ showChat }: { showChat: boolean }) => {
       >
         <div className="h-full flex flex-col">
           <div className="py-6 lg:py-10 h-full overflow-hidden">
-            <ShowTable />
+            {selectedTable && <ShowTable />}
           </div>
         </div>
       </div>

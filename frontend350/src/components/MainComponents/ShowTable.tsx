@@ -1,8 +1,10 @@
+//showTable.tsx
 import { useState, useRef, useEffect } from "react";
-import { useTablesContent, useTablesData } from "@/context/DataProvider";
+import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
 import { TableRow } from "@/data/TableContent";
 import { useTheme } from "@/context/ThemeProvider";
+import { handleJsonTableOperation } from "@/api/TableContentApi";
 
 // Simple icon components for demonstration
 type IconProps = {
@@ -106,6 +108,7 @@ const ShowTable = () => {
   } | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const tableRef = useRef<HTMLTableElement>(null);
+  
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -131,7 +134,7 @@ const ShowTable = () => {
     setEditValue(e.target.value);
   };
 
-  const handleCellBlur = () => {
+  const handleCellBlur = async () => {
     if (!editingCell) return;
 
     const { rowIndex, header } = editingCell;
@@ -141,27 +144,37 @@ const ShowTable = () => {
       return;
     }
 
-    dispatchtablesContent({
-      type: "EDIT_ROW",
-      payload: {
-        tableId: TableContent[0].id,
-        rowId: rowId,
-        newRow: { [header]: editValue },
+    await handleJsonTableOperation(
+      {
+        type: "EDIT_ROW",
+        payload: {
+          tableId: TableContent[0].id,
+          rowId: rowId,
+          newRow: { [header]: editValue },
+        },
       },
-    });
-
+      dispatchtablesContent
+    );
+    // dispatchtablesContent({
+    //   type: "EDIT_ROW",
+    //   payload: {
+    //     tableId: TableContent[0].id,
+    //     rowId: rowId,
+    //     newRow: { [header]: editValue },
+    //   },
+    // });
     setEditingCell(null);
   };
 
   // Keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (!editingCell) return;
 
     const { rowIndex, header } = editingCell;
 
     switch (e.key) {
       case "Enter":
-        handleCellBlur();
+        await handleCellBlur();
         if (rowIndex < rows.length - 1) {
           const downCellValue = rows[rowIndex + 1][header];
           setEditValue(
@@ -175,7 +188,7 @@ const ShowTable = () => {
 
       case "Tab":
         e.preventDefault();
-        handleCellBlur();
+        await handleCellBlur();
         const currentHeaderIndex = headers.indexOf(header);
         if (currentHeaderIndex < headers.length - 1) {
           const nextHeader = headers[currentHeaderIndex + 1];
@@ -204,7 +217,7 @@ const ShowTable = () => {
       // Similar modifications for other cases...
       case "ArrowUp":
         e.preventDefault();
-        handleCellBlur();
+        await handleCellBlur();
         if (rowIndex > 0) {
           const upCellValue = rows[rowIndex - 1][header];
           setEditValue(
@@ -218,7 +231,7 @@ const ShowTable = () => {
 
       case "ArrowDown":
         e.preventDefault();
-        handleCellBlur();
+        await handleCellBlur();
         if (rowIndex < rows.length - 1) {
           const downCellValue = rows[rowIndex + 1][header];
           setEditValue(
@@ -232,7 +245,7 @@ const ShowTable = () => {
 
       case "ArrowLeft":
         e.preventDefault();
-        handleCellBlur();
+        await handleCellBlur();
         const leftHeaderIndex = headers.indexOf(header);
         if (leftHeaderIndex > 1) {
           const leftHeader = headers[leftHeaderIndex - 1];
@@ -257,7 +270,7 @@ const ShowTable = () => {
 
       case "ArrowRight":
         e.preventDefault();
-        handleCellBlur();
+        await handleCellBlur();
         const rightHeaderIndex = headers.indexOf(header);
         if (rightHeaderIndex < headers.length - 1) {
           const rightHeader = headers[rightHeaderIndex + 1];
@@ -286,7 +299,7 @@ const ShowTable = () => {
     }
   };
 
-  const handleAddRow = () => {
+  const handleAddRow = async () => {
     const newRow: TableRow = {
       id: Math.max(...rows.map((r) => Number(r.id)), 0) + 1,
     };
@@ -296,14 +309,16 @@ const ShowTable = () => {
       }
     });
 
-    dispatchtablesContent({
-      type: "ADD_ROW",
-      payload: {
-        tableId: TableContent[0].id,
-        row: newRow,
+    await handleJsonTableOperation(
+      {
+        type: "ADD_ROW",
+        payload: {
+          tableId: TableContent[0].id,
+          row: newRow,
+        },
       },
-    });
-
+      dispatchtablesContent
+    );
     setTimeout(() => {
       setEditingCell({
         rowIndex: rows.length,
@@ -312,7 +327,7 @@ const ShowTable = () => {
       setEditValue("");
     }, 0);
   };
-  const handleDuplicateRow = (rowId: number | string) => {
+  const handleDuplicateRow = async (rowId: number | string) => {
     // console.log("Duplicating row with id:", rowId); // Debug log
     if (rowId === null) return;
 
@@ -335,47 +350,91 @@ const ShowTable = () => {
 
     console.log("New duplicated row:", newRow); // Debug log
 
-    dispatchtablesContent({
-      type: "ADD_ROW",
-      payload: {
-        tableId: TableContent[0].id,
-        row: newRow,
+    await handleJsonTableOperation(
+      {
+        type: "ADD_ROW",
+        payload: {
+          tableId: TableContent[0].id,
+          row: newRow,
+        },
       },
-    });
+      dispatchtablesContent
+    );
+
+    // dispatchtablesContent({
+    //   type: "ADD_ROW",
+    //   payload: {
+    //     tableId: TableContent[0].id,
+    //     row: newRow,
+    //   },
+    // });
   };
-  const handleAddColumn = () => {
+  const handleAddColumn = async () => {
     const newHeader = `column_${headers.length + 1}`;
 
-    dispatchtablesContent({
-      type: "ADD_COLUMN",
-      payload: {
-        tableId: TableContent[0].id,
-        header: newHeader,
+    await handleJsonTableOperation(
+      {
+        type: "ADD_COLUMN",
+        payload: {
+          tableId: TableContent[0].id,
+          header: newHeader,
+        },
       },
-    });
+      dispatchtablesContent
+    );
+
+    // dispatchtablesContent({
+    //   type: "ADD_COLUMN",
+    //   payload: {
+    //     tableId: TableContent[0].id,
+    //     header: newHeader,
+    //   },
+    // });
   };
 
-  const handleDeleteRow = (rowId: number | string) => {
-    dispatchtablesContent({
-      type: "DELETE_ROW",
-      payload: {
-        tableId: TableContent[0].id,
-        rowId,
+  const handleDeleteRow = async (rowId: number | string) => {
+    await handleJsonTableOperation(
+      {
+        type: "DELETE_ROW",
+        payload: {
+          tableId: TableContent[0].id,
+          rowId,
+        },
       },
-    });
+      dispatchtablesContent
+    );
+    // dispatchtablesContent({
+    //   type: "DELETE_ROW",
+    //   payload: {
+    //     tableId: TableContent[0].id,
+    //     rowId,
+    //   },
+    // });
   };
 
-  const handleDeleteColumn = (header: string) => {
+  const handleDeleteColumn = async (header: string) => {
     if (headers.length <= 1) return; // Don't delete the last column
 
     const newHeaders = headers.filter((h) => h !== header);
-    dispatchtablesContent({
-      type: "EDIT_TABLE_HEADERS",
-      payload: {
-        tableId: TableContent[0].id,
-        headers: newHeaders,
+
+    await handleJsonTableOperation(
+      {
+        type: "EDIT_TABLE_HEADERS",
+        payload: {
+          tableId: TableContent[0].id,
+          headers: newHeaders,
+        },
       },
-    });
+      dispatchtablesContent
+    );
+
+    // dispatchtablesContent({
+    //   type: "EDIT_TABLE_HEADERS",
+    //   payload: {
+    //     tableId: TableContent[0].id,
+    //     headers: newHeaders,
+    //   },
+    // });
   };
 
   // Context menu

@@ -2,8 +2,9 @@
 import React from "react";
 import SideBarEntries from "./SideBarEntries";
 import { useTheme } from "@/context/ThemeProvider";
-import { useTablesData } from "@/context/DataProvider";
+import { useTablesData } from "@/context/DataProviderReal";
 import CreateTableButton from "./CreateTableButton";
+import { handleTableOperation } from "@/api/TableDataApi";
 
 interface SideBarProps {
   isOpen: boolean;
@@ -14,30 +15,58 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
   const { tablesData, dispatchTablesData } = useTablesData();
   const { theme } = useTheme();
 
-  const handleTableEdit = (id: number, name: string) => {
-    dispatchTablesData({
-      type: "EDIT",
-      payload: {
-        id: id,
-        table_name: name,
+  const handleTableEdit = async (id: number, name: string) => {
+    await handleTableOperation(
+      {
+        type: "EDIT",
+        payload: {
+          id: id,
+          table_name: name,
+        },
       },
-    });
+      dispatchTablesData
+    );
+    // dispatchTablesData({
+    //   type: "EDIT",
+    //   payload: {
+    //     id: id,
+    //     table_name: name,
+    //   },
+    // });
   };
-  const handleTableShare = (id: number) => {
-    dispatchTablesData({
-      type: "SHARE",
-      payload: {
-        id: id,
+  const handleTableShare = async (id: number) => {
+    await handleTableOperation(
+      {
+        type: "SHARE",
+        payload: {
+          id: id,
+        },
       },
-    });
+      dispatchTablesData
+    );
+    // dispatchTablesData({
+    //   type: "SHARE",
+    //   payload: {
+    //     id: id,
+    //   },
+    // });
   };
-  const handleTableDelete = (id: number) => {
-    dispatchTablesData({
-      type: "DELETE",
-      payload: {
-        id: id,
+  const handleTableDelete = async (id: number) => {
+    await handleTableOperation(
+      {
+        type: "DELETE",
+        payload: {
+          id: id,
+        },
       },
-    });
+      dispatchTablesData
+    );
+    // dispatchTablesData({
+    //   type: "DELETE",
+    //   payload: {
+    //     id: id,
+    //   },
+    // });
   };
 
   return (

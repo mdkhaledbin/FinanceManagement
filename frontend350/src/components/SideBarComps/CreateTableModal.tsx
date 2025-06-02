@@ -1,4 +1,6 @@
-import { useTablesContent, useTablesData } from "@/context/DataProvider";
+import { handleJsonTableOperation } from "@/api/TableContentApi";
+import { handleTableOperation } from "@/api/TableDataApi";
+import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
 import { useTheme } from "@/context/ThemeProvider";
 import { JsonTableItem } from "@/data/TableContent";
 import React, { useState } from "react";
@@ -19,7 +21,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const { dispatchTablesData } = useTablesData();
   const { dispatchtablesContent } = useTablesContent();
 
-  const handleCreateTable = () => {
+  const handleCreateTable = async () => {
     console.log(`Table will be created.`);
 
     if (!tableName.trim()) {
@@ -43,21 +45,41 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         rows: [],
       },
     };
-    dispatchtablesContent({
-      type: "ADD_TABLE",
-      payload: {
-        id: newId,
-        data: {
-          headers: defaultHeaders,
-          rows: [],
+    await handleTableOperation(
+      {
+        type: "ADD_TABLE",
+        payload: { id: newId, table_name: tableName, description: description },
+      },
+      dispatchTablesData
+    );
+    await handleJsonTableOperation(
+      {
+        type: "ADD_TABLE",
+        payload: {
+          id: newId,
+          data: {
+            headers: defaultHeaders,
+            rows: [],
+          },
         },
       },
-    });
+      dispatchtablesContent
+    );
+    // dispatchtablesContent({
+    //   type: "ADD_TABLE",
+    //   payload: {
+    //     id: newId,
+    //     data: {
+    //       headers: defaultHeaders,
+    //       rows: [],
+    //     },
+    //   },
+    // });
 
-    dispatchTablesData({
-      type: "ADD_TABLE",
-      payload: { id: newId, table_name: tableName, description: description }
-    })
+    // dispatchTablesData({
+    //   type: "ADD_TABLE",
+    //   payload: { id: newId, table_name: tableName, description: description },
+    // });
 
     // // onCreateTable(newTable, newTableContent);
     console.log(`Table to create: ${newTableContent}`);

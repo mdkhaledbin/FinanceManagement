@@ -15,7 +15,8 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-const jsonTableData = getAllTableContents();
+// Create a mutable copy of the static data
+let jsonTableData = [...getAllTableContents()];
 
 function mockApiResponse<T>(
   endpoint: string,
@@ -29,12 +30,20 @@ function mockApiResponse<T>(
 
   // POST /tables - Add new table
   if (endpoint === "/tables" && method === "POST") {
-    const newTable: JsonTableItem = {
-      id: Math.max(...jsonTableData.map((t) => t.id)) + 1,
-      ...(body as Omit<JsonTableItem, "id">),
-    };
-    jsonTableData.push(newTable);
-    return { success: true, data: newTable as unknown as T };
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "id" in body &&
+      "data" in body
+    ) {
+      const newTable: JsonTableItem = {
+        id: Number((body as { id: string | number }).id),
+        data: (body as { data: TableData }).data,
+      };
+      jsonTableData.push(newTable);
+      return { success: true, data: newTable as unknown as T };
+    }
+    return { success: false, error: "Invalid request body" };
   }
 
   // DELETE /tables/:id - Delete table
@@ -60,18 +69,45 @@ function mockApiResponse<T>(
   // POST /tables/:id/rows - Add row to table
   if (endpoint.match(/\/tables\/\d+\/rows$/) && method === "POST") {
     const tableId = parseInt(endpoint.split("/")[2]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
+    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
+    if (tableIndex === -1) return { success: false, error: "Table not found" };
+
+    const table = jsonTableData[tableIndex];
+    const rowData = body as Omit<TableRow, "id">;
+
+    // Generate new row ID
+    const rowIds = table.data.rows
+      .map((r) => (typeof r.id === "number" ? r.id : 0))
+      .filter(Number.isInteger);
+    const newRowId = rowIds.length > 0 ? Math.max(...rowIds) + 1 : 1;
 
     const newRow: TableRow = {
-      id:
-        Math.max(
-          0,
-          ...table.data.rows.map((r) => (typeof r.id === "number" ? r.id : 0))
-        ) + 1,
-      ...(body as Omit<TableRow, "id">),
+      id: newRowId,
+      ...rowData,
+      // Initialize all columns with empty values if they don't exist
+      ...Object.fromEntries(
+        table.data.headers
+          .filter((header) => !(header in rowData))
+          .map((header) => [header, ""])
+      )
     };
-    table.data.rows.push(newRow);
+
+    // Create a new copy of the table with the updated rows
+    const updatedTable = {
+      ...table,
+      data: {
+        ...table.data,
+        rows: [...table.data.rows, newRow]
+      }
+    };
+
+    // Update the table in the array
+    jsonTableData = [
+      ...jsonTableData.slice(0, tableIndex),
+      updatedTable,
+      ...jsonTableData.slice(tableIndex + 1)
+    ];
+
     return { success: true, data: newRow as unknown as T };
   }
 
@@ -80,20 +116,40 @@ function mockApiResponse<T>(
     const parts = endpoint.split("/");
     const tableId = parseInt(parts[2]);
     const rowId = parseInt(parts[4]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
+    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
+    if (tableIndex === -1) return { success: false, error: "Table not found" };
 
-    const row = table.data.rows.find((r) => r.id === rowId);
-    if (!row) return { success: false, error: "Row not found" };
+    const table = jsonTableData[tableIndex];
+    const rowIndex = table.data.rows.findIndex((r) => r.id === rowId);
+    if (rowIndex === -1) return { success: false, error: "Row not found" };
 
-    // Update only the fields provided in `body`
-    Object.entries(body as Partial<TableRow>).forEach(([key, value]) => {
-      if (value !== undefined) {
-        row[key] = value;
+    // Create a new copy of the row with updates
+    const updatedRow = {
+      ...table.data.rows[rowIndex],
+      ...(body as Partial<TableRow>)
+    };
+
+    // Create a new copy of the table with the updated row
+    const updatedTable = {
+      ...table,
+      data: {
+        ...table.data,
+        rows: [
+          ...table.data.rows.slice(0, rowIndex),
+          updatedRow,
+          ...table.data.rows.slice(rowIndex + 1)
+        ]
       }
-    });
+    };
 
-    return { success: true, data: row as unknown as T };
+    // Update the table in the array
+    jsonTableData = [
+      ...jsonTableData.slice(0, tableIndex),
+      updatedTable,
+      ...jsonTableData.slice(tableIndex + 1)
+    ];
+
+    return { success: true, data: updatedRow as unknown as T };
   }
 
   // DELETE /tables/:id/rows/:rowId - Delete row
@@ -101,36 +157,112 @@ function mockApiResponse<T>(
     const parts = endpoint.split("/");
     const tableId = parseInt(parts[2]);
     const rowId = parseInt(parts[4]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
+    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
+    if (tableIndex === -1) return { success: false, error: "Table not found" };
 
-    table.data.rows = table.data.rows.filter((row) => row.id !== rowId);
-    return { success: true, data: { success: true } as unknown as T };
+    const table = jsonTableData[tableIndex];
+    const initialLength = table.data.rows.length;
+    
+    // Create a new copy of the table with the row removed
+    const updatedTable = {
+      ...table,
+      data: {
+        ...table.data,
+        rows: table.data.rows.filter((row) => row.id !== rowId)
+      }
+    };
+
+    // Update the table in the array
+    jsonTableData = [
+      ...jsonTableData.slice(0, tableIndex),
+      updatedTable,
+      ...jsonTableData.slice(tableIndex + 1)
+    ];
+
+    return { 
+      success: initialLength !== updatedTable.data.rows.length,
+      data: { success: initialLength !== updatedTable.data.rows.length } as unknown as T 
+    };
   }
 
   // PUT /tables/:id/headers - Update headers
   if (endpoint.match(/\/tables\/\d+\/headers$/) && method === "PUT") {
     const tableId = parseInt(endpoint.split("/")[2]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
+    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
+    if (tableIndex === -1) return { success: false, error: "Table not found" };
 
+    const table = jsonTableData[tableIndex];
     const { headers } = body as { headers: string[] };
-    table.data.headers = headers;
-    return { success: true, data: table.data as unknown as T };
+
+    // Update rows to maintain column consistency
+    const updatedRows = table.data.rows.map((row) => {
+      const newRow: TableRow = { id: row.id };
+      headers.forEach(header => {
+        // Ensure no undefined values are assigned and cast to correct type
+        const value = Object.prototype.hasOwnProperty.call(row, header) ? row[header] : "";
+        newRow[header] = value !== undefined ? value as string | number | boolean | null : "";
+      });
+      return newRow;
+    });
+
+    // Create a new copy of the table with updated headers and rows
+    const updatedTable = {
+      ...table,
+      data: {
+        headers,
+        rows: updatedRows
+      }
+    };
+
+    // Update the table in the array
+    jsonTableData = [
+      ...jsonTableData.slice(0, tableIndex),
+      updatedTable,
+      ...jsonTableData.slice(tableIndex + 1)
+    ];
+
+    return { success: true, data: updatedTable.data as unknown as T };
   }
 
   // POST /tables/:id/columns - Add column (header + update rows)
   if (endpoint.match(/\/tables\/\d+\/columns$/) && method === "POST") {
     const tableId = parseInt(endpoint.split("/")[2]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
+    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
+    if (tableIndex === -1) return { success: false, error: "Table not found" };
 
+    const table = jsonTableData[tableIndex];
     const { header } = body as { header: string };
-    table.data.headers.push(header);
-    table.data.rows.forEach((row) => {
-      row[header] = "";
-    });
-    return { success: true, data: table.data as unknown as T };
+    
+    if (table.data.headers.includes(header)) {
+      return { success: false, error: "Column already exists" };
+    }
+
+    // Create new headers array
+    const newHeaders = [...table.data.headers, header];
+
+    // Update rows with the new column
+    const updatedRows = table.data.rows.map(row => ({
+      ...row,
+      [header]: ""
+    }));
+
+    // Create a new copy of the table with updated headers and rows
+    const updatedTable = {
+      ...table,
+      data: {
+        headers: newHeaders,
+        rows: updatedRows
+      }
+    };
+
+    // Update the table in the array
+    jsonTableData = [
+      ...jsonTableData.slice(0, tableIndex),
+      updatedTable,
+      ...jsonTableData.slice(tableIndex + 1)
+    ];
+
+    return { success: true, data: updatedTable.data as unknown as T };
   }
 
   return {
@@ -149,7 +281,6 @@ const apiRequest = async <T>(
   const USE_MOCK_RESPONSES = true;
 
   if (USE_MOCK_RESPONSES) {
-    // Use your static data for mock responses
     return mockApiResponse<T>(endpoint, method, body);
   }
 
@@ -177,8 +308,7 @@ const apiRequest = async <T>(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "An unknown error occurred",
+      error: error instanceof Error ? error.message : "An unknown error occurred",
     };
   }
 };
@@ -191,9 +321,10 @@ export const jsonTableApi = {
 
   // Add a new table
   async addTable(
+    id: string,
     tableData: Omit<JsonTableItem, "id">
   ): Promise<ApiResponse<JsonTableItem>> {
-    return apiRequest<JsonTableItem>("/tables", "POST", tableData);
+    return apiRequest<JsonTableItem>("/tables", "POST", { id, ...tableData });
   },
 
   // Delete a table
@@ -265,9 +396,11 @@ export const handleJsonTableOperation = async (
     switch (action.type) {
       case "ADD_TABLE": {
         const { id, data } = action.payload;
-        const response = await jsonTableApi.addTable({ data });
+        const response = await jsonTableApi.addTable(String(id), { data });
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to add table");
+        }
 
         dispatch({
           type: "ADD_TABLE",
@@ -283,7 +416,9 @@ export const handleJsonTableOperation = async (
         const { tableId, row } = action.payload;
         const response = await jsonTableApi.addRow(tableId, row);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to add row");
+        }
 
         dispatch({
           type: "ADD_ROW",
@@ -299,16 +434,11 @@ export const handleJsonTableOperation = async (
         const { tableId, rowId, newRow } = action.payload;
         const response = await jsonTableApi.editRow(tableId, rowId, newRow);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to edit row");
+        }
 
-        dispatch({
-          type: "EDIT_ROW",
-          payload: {
-            tableId,
-            rowId,
-            newRow: response.data || newRow,
-          },
-        });
+        dispatch(action);
         break;
       }
 
@@ -316,7 +446,9 @@ export const handleJsonTableOperation = async (
         const { tableId, rowId } = action.payload;
         const response = await jsonTableApi.deleteRow(tableId, rowId);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to delete row");
+        }
 
         dispatch(action);
         break;
@@ -326,7 +458,9 @@ export const handleJsonTableOperation = async (
         const { tableId, headers } = action.payload;
         const response = await jsonTableApi.updateHeaders(tableId, headers);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to update headers");
+        }
 
         dispatch(action);
         break;
@@ -336,7 +470,9 @@ export const handleJsonTableOperation = async (
         const { tableId } = action.payload;
         const response = await jsonTableApi.deleteTable(tableId);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to delete table");
+        }
 
         dispatch(action);
         break;
@@ -346,16 +482,11 @@ export const handleJsonTableOperation = async (
         const { tableId, header } = action.payload;
         const response = await jsonTableApi.addColumn(tableId, header);
 
-        if (response.error) throw new Error(response.error);
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to add column");
+        }
 
-        dispatch({
-          type: "ADD_COLUMN",
-          payload: {
-            tableId,
-            header,
-            // Include any additional data from the response if needed
-          },
-        });
+        dispatch(action);
         break;
       }
 

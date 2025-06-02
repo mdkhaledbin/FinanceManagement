@@ -3,7 +3,7 @@ import MainContent from "@/components/MainContent";
 import Navbar from "@/components/Navbar";
 import SideBar from "@/components/SideBarComps/SideBar";
 import ToggleChat from "@/components/ToggleChat";
-import { DataProvider } from "@/context/DataProvider";
+import { DataProvider } from "@/context/DataProviderReal";
 import { SelectedTableProvider } from "@/context/SelectedTableProvider";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { useState } from "react";
