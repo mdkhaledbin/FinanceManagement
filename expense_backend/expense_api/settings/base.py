@@ -7,14 +7,14 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-env = environ.Env(
-    DEBUG=(bool, False)
-)
-environ.Env.read_env(BASE_DIR / '.env')
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+
+print("SECRET_KEY FROM ENV:", env('SECRET_KEY', default='NOT FOUND'))
 
 INSTALLED_APPS = [
     'django.contrib.admin',
