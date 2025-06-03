@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { SunIcon, MoonIcon } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/context/ThemeProvider";
 import clsx from "clsx";
@@ -91,6 +92,7 @@ const SignInForm = () => {
               ? "Create an Account"
               : "Welcome Back"}
           </CardTitle>
+
           <CardDescription
             className={clsx(
               theme === "dark" ? "text-gray-400" : "text-gray-600"
@@ -102,6 +104,29 @@ const SignInForm = () => {
               ? "Join FinBot today!"
               : "Sign in to continue to FinBot"}
           </CardDescription>
+
+          {!showForgotPassword && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="link"
+                  className={clsx(
+                    "text-sm underline mt-2",
+                    theme === "dark" ? "text-blue-400" : "text-blue-600"
+                  )}
+                >
+                  What can FinBot do?
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="text-sm max-w-sm">
+                • Smart budget tracking<br />
+                • Conversational chatbot for finance help<br />
+                • Real-time analytics & personalized insights<br />
+                • Cross-device sync & AI reminders<br />
+                • Military-grade data protection
+              </PopoverContent>
+            </Popover>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-6 p-6 sm:p-8">
