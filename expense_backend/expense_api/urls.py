@@ -25,4 +25,5 @@ urlpatterns = [
     path('llm/', include('expense_api.apps.llm.urls')),   # Now 'include' will work
     path('agent/', include('expense_api.apps.agent.urls')),
     path('auth/', include('expense_api.apps.user_auth.urls')),
+    path('main/', include('expense_api.apps.FinanceManagement.urls')),
 ]

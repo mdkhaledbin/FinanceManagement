@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'expense_api.apps.user_auth',
     'rest_framework',
     'rest_framework_simplejwt',
+    'expense_api.apps.FinanceManagement',
 ]
 
 MIDDLEWARE = [
