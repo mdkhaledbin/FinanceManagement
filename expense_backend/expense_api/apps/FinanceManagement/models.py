@@ -11,3 +11,19 @@ class DynamicTableData(models.Model):
 
     def __str__(self):
         return self.table_name
+
+
+class JsonTable(models.Model):
+    table = models.OneToOneField(DynamicTableData, on_delete=models.CASCADE, primary_key=True)
+    headers = models.JSONField()  # Store headers as list of strings
+
+    def __str__(self):
+        return f"JsonTable for {self.table.table_name}"
+
+
+class JsonTableRow(models.Model):
+    table = models.ForeignKey(JsonTable, related_name='rows', on_delete=models.CASCADE)
+    data = models.JSONField()  # Store each row as a JSON object
+
+    def __str__(self):
+        return f"Row {self.id} of JsonTable {self.table_id}"

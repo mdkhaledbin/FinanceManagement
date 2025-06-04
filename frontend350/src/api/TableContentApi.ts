@@ -396,7 +396,7 @@ export const handleJsonTableOperation = async (
     switch (action.type) {
       case "ADD_TABLE": {
         const { id, data } = action.payload;
-        const response = await jsonTableApi.addTable(String(id), { data });
+        const response = await jsonTableApi.addTable(String(id), { data});
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add table");
