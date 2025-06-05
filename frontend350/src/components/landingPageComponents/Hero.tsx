@@ -1,13 +1,33 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/context/ThemeProvider';
 import clsx from 'clsx';
+import Image from 'next/image';
 
-const primaryButtonStyleLight = "bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg";
-const primaryButtonStyleDark = "bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors font-semibold text-lg";
+const primaryButtonStyleLight =
+  "bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg";
+const primaryButtonStyleDark =
+  "bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors font-semibold text-lg";
 
 export default function Hero() {
   const { theme } = useTheme();
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchImage = async () => {
+      try {
+        const res = await fetch(
+          'https://api.unsplash.com/photos/random?query=finance,money,transaction,bank&client_id=x9qDOaEYBlQkYuMWMg9UXQ-Lxm-242FO6qJFtXW1-M8'
+        );
+        const data = await res.json();
+        setImageUrl(data.urls.regular);
+      } catch (err) {
+        console.error('Failed to fetch image from Unsplash:', err);
+      }
+    };
+
+    fetchImage();
+  }, []);
 
   return (
     <section className={clsx(
@@ -28,14 +48,24 @@ export default function Hero() {
           )}>
             Experience intuitive finance tracking and seamless bookkeeping with FinBot. Our chat integration makes managing your money simpler than ever.
           </p>
-          <a href="#cta" className={theme === 'dark' ? primaryButtonStyleDark : primaryButtonStyleLight}>Get Started</a>
+          <a
+            href="#cta"
+            className={theme === 'dark' ? primaryButtonStyleDark : primaryButtonStyleLight}
+          >
+            Get Started
+          </a>
         </div>
         <div className="flex justify-center">
-          <img 
-            src="/Hero.png" 
-            alt="FinBot App UI Mockup" 
-            className="rounded-xl shadow-2xl max-w-sm md:max-w-md lg:max-w-lg transform transition-transform duration-500 hover:scale-105" 
-          />
+          {imageUrl && (
+            <Image
+              src={imageUrl}
+              alt="FinBot App UI Mockup"
+              width={500}
+              height={400}
+              className="rounded-xl shadow-2xl transform transition-transform duration-500 hover:scale-105"
+              unoptimized
+            />
+          )}
         </div>
       </div>
     </section>
