@@ -81,7 +81,7 @@ async def get_user_tables(user_id: int) -> str:
 
 # ✅ Tool 2: Create a new table with headers
 @mcp.tool()
-async def create_table(user_id: int, table_name: str, description: str, headers: str) -> str:
+async def create_table(user_id: int, table_name: str, description: str, headers) -> str:
     """
     Create a new table with headers.
     
@@ -89,14 +89,22 @@ async def create_table(user_id: int, table_name: str, description: str, headers:
     - user_id: User ID who owns the table
     - table_name: Name of the table
     - description: Description of the table
-    - headers: JSON string of column headers array
+    - headers: List of column headers or JSON string of headers array
     
     Returns:
     - JSON string with success status and table data
     """
     try:
-        # Parse headers from JSON string
-        headers_list = json.loads(headers) if isinstance(headers, str) else headers
+        # Handle both string and list inputs for headers
+        if isinstance(headers, str):
+            try:
+                headers_list = json.loads(headers)
+            except json.JSONDecodeError:
+                return json.dumps({"success": False, "error": "Invalid JSON format for headers"})
+        elif isinstance(headers, list):
+            headers_list = headers
+        else:
+            return json.dumps({"success": False, "error": "Headers must be a list or JSON string"})
         
         if not isinstance(headers_list, list) or not all(isinstance(h, str) for h in headers_list):
             return json.dumps({"success": False, "error": "Headers must be a list of strings"})
@@ -111,7 +119,7 @@ async def create_table(user_id: int, table_name: str, description: str, headers:
             with transaction.atomic():
                 dynamic_table = DynamicTableData.objects.create(
                     table_name=table_name.strip(),
-                    description=description.strip(),
+                    description=description.strip() if description else "",
                     user=user,
                     pending_count=0
                 )
@@ -127,43 +135,50 @@ async def create_table(user_id: int, table_name: str, description: str, headers:
                 "table_id": dynamic_table.id,
                 "table_name": dynamic_table.table_name,
                 "description": dynamic_table.description,
-                "headers": headers_list
+                "headers": headers_list,
+                "user_id": user.id,
+                "created_at": dynamic_table.created_at.isoformat()
             }
         })
         
     except User.DoesNotExist:
         return json.dumps({"success": False, "error": "User not found"})
-    except json.JSONDecodeError:
-        return json.dumps({"success": False, "error": "Invalid JSON format for headers"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
 # ✅ Tool 3: Add a new row to a table
 @mcp.tool()
-async def add_table_row(table_id: int, row_data: str) -> str:
+async def add_table_row(table_id: int, row_data) -> str:
     """
     Add a new row to an existing table.
     
     Parameters:
     - table_id: ID of the table to add row to
-    - row_data: JSON string of row data as key-value pairs
+    - row_data: Row data as dictionary or JSON string
     
     Returns:
     - JSON string with success status
     """
     try:
-        # Parse row data from JSON string
-        row_dict = json.loads(row_data) if isinstance(row_data, str) else row_data
+        # Handle both string and dict inputs
+        if isinstance(row_data, str):
+            try:
+                row_dict = json.loads(row_data)
+            except json.JSONDecodeError:
+                return json.dumps({"success": False, "error": "Invalid JSON format for row data"})
+        elif isinstance(row_data, dict):
+            row_dict = row_data
+        else:
+            return json.dumps({"success": False, "error": "Row data must be a dictionary or JSON string"})
         
-        if not isinstance(row_dict, dict):
-            return json.dumps({"success": False, "error": "Row data must be a dictionary"})
-        
-        json_table = await sync_to_async(JsonTable.objects.get)(pk=table_id)
+        # Get JsonTable by the table_id (which is the primary key from DynamicTableData)
+        json_table = await sync_to_async(JsonTable.objects.get)(table_id=table_id)
         
         # Add unique ID if not present
         if 'id' not in row_dict:
             row_dict['id'] = str(uuid.uuid4())[:8]
         
+        # Create the row
         await sync_to_async(JsonTableRow.objects.create)(table=json_table, data=row_dict)
         
         return json.dumps({
@@ -174,30 +189,38 @@ async def add_table_row(table_id: int, row_data: str) -> str:
         
     except JsonTable.DoesNotExist:
         return json.dumps({"success": False, "error": "Table not found"})
-    except json.JSONDecodeError:
-        return json.dumps({"success": False, "error": "Invalid JSON format for row data"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
 # ✅ Tool 4: Update an existing row
 @mcp.tool()
-async def update_table_row(table_id: int, row_id: str, new_data: str) -> str:
+async def update_table_row(table_id: int, row_id: str, new_data) -> str:
     """
     Update an existing row in a table.
     
     Parameters:
     - table_id: ID of the table
     - row_id: ID of the row to update
-    - new_data: JSON string of new data to update
+    - new_data: New data to update as dictionary or JSON string
     
     Returns:
     - JSON string with success status
     """
     try:
-        new_data_dict = json.loads(new_data) if isinstance(new_data, str) else new_data
+        # Handle both string and dict inputs
+        if isinstance(new_data, str):
+            try:
+                new_data_dict = json.loads(new_data)
+            except json.JSONDecodeError:
+                return json.dumps({"success": False, "error": "Invalid JSON format for new data"})
+        elif isinstance(new_data, dict):
+            new_data_dict = new_data
+        else:
+            return json.dumps({"success": False, "error": "New data must be a dictionary or JSON string"})
         
+        # Find the row using table_id and the id within the JSON data
         row = await sync_to_async(JsonTableRow.objects.get)(
-            table_id=table_id,
+            table__table_id=table_id,
             data__id=row_id
         )
         
@@ -219,8 +242,6 @@ async def update_table_row(table_id: int, row_id: str, new_data: str) -> str:
         
     except JsonTableRow.DoesNotExist:
         return json.dumps({"success": False, "error": "Row not found"})
-    except json.JSONDecodeError:
-        return json.dumps({"success": False, "error": "Invalid JSON format for new data"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
@@ -359,20 +380,30 @@ async def add_table_column(table_id: int, header: str) -> str:
 
 # ✅ Tool 8: Delete columns from a table
 @mcp.tool()
-async def delete_table_columns(table_id: int, new_headers: str) -> str:
+async def delete_table_columns(table_id: int, new_headers) -> str:
     """
     Delete columns from a table by providing new headers list.
     
     Parameters:
     - table_id: ID of the table
-    - new_headers: JSON string of headers to keep (others will be deleted)
+    - new_headers: List of headers to keep or JSON string (others will be deleted)
     
     Returns:
     - JSON string with success status
     """
     try:
-        new_headers_list = json.loads(new_headers) if isinstance(new_headers, str) else new_headers
-        json_table = await sync_to_async(JsonTable.objects.get)(pk=table_id)
+        # Handle both string and list inputs
+        if isinstance(new_headers, str):
+            try:
+                new_headers_list = json.loads(new_headers)
+            except json.JSONDecodeError:
+                return json.dumps({"success": False, "error": "Invalid JSON format for headers"})
+        elif isinstance(new_headers, list):
+            new_headers_list = new_headers
+        else:
+            return json.dumps({"success": False, "error": "Headers must be a list or JSON string"})
+            
+        json_table = await sync_to_async(JsonTable.objects.get)(table_id=table_id)
         
         @sync_to_async
         def delete_columns():
@@ -403,8 +434,6 @@ async def delete_table_columns(table_id: int, new_headers: str) -> str:
         
     except JsonTable.DoesNotExist:
         return json.dumps({"success": False, "error": "Table not found"})
-    except json.JSONDecodeError:
-        return json.dumps({"success": False, "error": "Invalid JSON format for headers"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
