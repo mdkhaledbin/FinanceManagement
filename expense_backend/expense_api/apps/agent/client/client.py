@@ -22,32 +22,42 @@ def debug_print(*args, **kwargs):
 
 
 PROMPT_TEMPLATE = """
-You are an intelligent expense tracker and database assistant.
+You are an intelligent expense tracker and financial data assistant.
 
-Your job is to understand the user's query and invoke the appropriate database tool function using structured tool calls.
+Your job is to understand the user's natural language queries and invoke the appropriate finance management tools.
 
-You have access to the following tools:
+You have access to the following tools for managing financial data:
 
-1. `insert_user(name: str, email: str)`  
-   → Use this when the user wants to create a new user account or registers with a name and email.
-
-2. `insert_category_table(use_id: str, table_category: str, table: dict)`  
-   → Use this when the user shares a structured table (with rows, columns, notes) for a specific category, like transport, food, or health logs.
+1. `get_user_tables(user_id: int)` - Get all tables belonging to a user
+2. `create_table(user_id: int, table_name: str, description: str, headers: list)` - Create new expense/budget table
+3. `add_table_row(table_id: int, row_data: dict)` - Add expense entry to a table
+4. `update_table_row(table_id: int, row_id: str, new_data: dict)` - Update existing expense entry
+5. `delete_table_row(table_id: int, row_id: str)` - Delete an expense entry
+6. `get_table_content(user_id: int, table_id?: int)` - Get table data for analysis
+7. `add_table_column(table_id: int, header: str)` - Add new column to table
+8. `delete_table_columns(table_id: int, new_headers: list)` - Remove columns from table
+9. `update_table_metadata(user_id: int, table_id: int, ...)` - Update table name/description
 
 Instructions:
-- Always extract structured data (user ID, category, table, name, email, etc.) from the query.
-- Use tool calls only when you have enough information.
-- If information is missing, ask for clarification.
-- Do not reply with natural sentences unless clarification is needed.
-- Format your response as a JSON tool invocation if possible.
+- Parse natural language queries about expenses, budgets, and financial tracking
+- Extract relevant information like amounts, categories, dates, descriptions
+- Use appropriate tools to perform requested operations
+- When adding expenses, create proper row data with appropriate headers
+- For Bengali/mixed language queries, understand the intent and extract structured data
+- Always include user_id in operations (this will be provided in the query data)
 
-Example 1 (new user):
-User: "create user named Mehedi with email mehedi@gmail.com"
-→ Tool: `insert_user(name="Mehedi", email="mehedi@gmail.com")`
+Example Queries:
+"ami gotokal sylhet e 100 tk khoroch korechi" 
+→ Extract: amount=100, location/category=sylhet, date=yesterday
+→ Tool: add_table_row with appropriate table_id and structured data
 
-Example 2 (structured category table):
-User: "insert this into table for user 1, category transport: columns [Date, Amount, Vendor], rows [...], note: transport logs"
-→ Tool: `insert_category_table(use_id="1", table_category="transport", table={...})`
+"Show me my expenses for this month"
+→ Tool: get_table_content to retrieve and analyze data
+
+"Create a new budget table for transport expenses"
+→ Tool: create_table with appropriate headers like [Date, Amount, Description, Vehicle]
+
+Always provide helpful responses and confirm successful operations.
 """
 
 
@@ -141,28 +151,46 @@ class ExpenseMCPClient:
             return "✅ Disconnected"
         return "ℹ️ Not connected"
 
-    async def process_query(self, query):
+    async def process_query(self, query_data):
         if not self.agent:
             await self.connect()
         if not self.agent:
             return "❌ Agent not initialized"
 
+        # Format the query with context
+        if isinstance(query_data, dict):
+            query_text = query_data.get('query', str(query_data))
+            user_id = query_data.get('user_id', 'unknown')
+            context = f"User ID: {user_id}\nQuery: {query_text}"
+            if 'table_id' in query_data:
+                context += f"\nTable ID: {query_data['table_id']}"
+            if 'context_type' in query_data:
+                context += f"\nContext: {query_data['context_type']}"
+        else:
+            context = f"Query: {query_data}"
+
         full_prompt = f"""{PROMPT_TEMPLATE}
-USER QUERY: {query}
+
+USER CONTEXT:
+{context}
+
+Process this request and use the appropriate tools to help the user.
 """
 
         try:
             response = await self.agent.ainvoke({"messages": full_prompt}, {"recursion_limit": 100})
 
-            if isinstance(response, dict) and "tool_name" in response and "args" in response:
-                print(f"🛠️ Tool called: {response['tool_name']}")
-                print(f"🧾 Tool arguments: {json.dumps(response['args'], indent=2)}")
-                return response
-
-            elif isinstance(response, AIMessage):
+            if isinstance(response, dict) and "messages" in response:
+                # Extract the last AI message
+                messages = response["messages"]
+                for message in reversed(messages):
+                    if hasattr(message, 'content'):
+                        return message.content
+                return str(response)
+            elif hasattr(response, 'content'):
                 return response.content
-
-            return str(response)
+            else:
+                return str(response)
 
         except Exception as e:
             error_msg = f"❌ Error processing query: {str(e)}"
@@ -172,12 +200,14 @@ USER QUERY: {query}
     async def run_interactive_loop(self):
         if not self.agent:
             await self.connect()
-        print("\n🚀 Expense MCP Client Ready! Type 'quit' to exit.")
+        print("\n🚀 Finance MCP Client Ready! Type 'quit' to exit.")
         while True:
             query = input("\nQuery: ").strip()
             if query.lower() in {"quit", "exit"}:
                 break
             print("\n⚙️ Processing...")
-            response = await self.process_query(query)
+            # Simulate query with user_id for testing
+            query_data = {"query": query, "user_id": 1}
+            response = await self.process_query(query_data)
             print("\n📤 Response:")
             print(response)

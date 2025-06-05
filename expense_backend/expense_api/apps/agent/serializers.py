@@ -3,12 +3,12 @@ from langchain_core.messages import AIMessage
 
 
 class QuerySerializer(serializers.Serializer):
-    """Input serializer for WordPress plugin/theme query."""
+    """Input serializer for finance management AI queries."""
     query = serializers.CharField()
 
 
 class ResponseSerializer(serializers.Serializer):
-    """Output serializer that sanitizes response format."""
+    """Output serializer for AI agent responses."""
     query = serializers.CharField()
     response = serializers.SerializerMethodField()
 
@@ -29,6 +29,13 @@ class ResponseSerializer(serializers.Serializer):
                 if isinstance(message, AIMessage):
                     return message.content
             return str(result)  # fallback to raw dict string
+
+        # Case 4: If it's a dict with financial analysis
+        if isinstance(result, dict) and "analysis" in result:
+            return {
+                "message": result.get("message", "Financial analysis completed"),
+                "analysis": result["analysis"]
+            }
 
         # Fallback: any other unknown format
         return str(result)
