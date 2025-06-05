@@ -2,6 +2,7 @@ import os
 import sys
 import json
 from contextlib import AsyncExitStack
+from typing import Dict, Any, List, Optional
 
 from django.conf import settings
 
@@ -37,6 +38,7 @@ You have access to the following tools for managing financial data:
 7. `add_table_column(table_id: int, header: str)` - Add new column to table
 8. `delete_table_columns(table_id: int, new_headers: list)` - Remove columns from table
 9. `update_table_metadata(user_id: int, table_id: int, ...)` - Update table name/description
+10. `delete_table(user_id: int, table_id: int)` - Delete entire table
 
 Instructions:
 - Parse natural language queries about expenses, budgets, and financial tracking
@@ -45,6 +47,14 @@ Instructions:
 - When adding expenses, create proper row data with appropriate headers
 - For Bengali/mixed language queries, understand the intent and extract structured data
 - Always include user_id in operations (this will be provided in the query data)
+- Pay attention to the detailed step information returned by each tool
+- Provide comprehensive feedback including operation steps when available
+
+The tools now return enhanced responses with step-by-step information:
+- Each operation includes a "steps" array showing progress
+- Steps have status: "in_progress", "completed", "failed", "skipped"
+- Failed steps include error details for better debugging
+- Successful operations include metadata like counts, IDs, and names
 
 Example Queries:
 "ami gotokal sylhet e 100 tk khoroch korechi" 
@@ -57,7 +67,8 @@ Example Queries:
 "Create a new budget table for transport expenses"
 → Tool: create_table with appropriate headers like [Date, Amount, Description, Vehicle]
 
-Always provide helpful responses and confirm successful operations.
+Always provide helpful responses, explain the steps taken, and confirm successful operations.
+If any step fails, explain what went wrong and suggest next actions.
 """
 
 
@@ -74,20 +85,148 @@ class ExpenseMCPClient:
         self.agent = None
         self.available_tools = []
         self.sessions = {}
+        self.operation_history = []  # Track operation history
 
     @staticmethod
     def read_config_json():
-        config_path = os.getenv("mcpConfig")
-        if not config_path:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(script_dir, "mcpConfig.json")
-            print(f"[INFO] mcpConfig not set. Falling back to: {config_path}")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, "mcpConfig.json")
+        print(f"[INFO] Loading MCP config from: {config_path}")
         try:
             with open(config_path, "r") as f:
                 return json.load(f)
         except Exception as e:
             print(f"❌ Failed to read config file: {e}")
             sys.exit(1)
+
+    def parse_tool_response(self, response_str: str) -> Dict[str, Any]:
+        """Parse and enhance tool response with step information."""
+        try:
+            response_data = json.loads(response_str)
+            
+            # Store operation in history
+            operation_record = {
+                "timestamp": self._get_timestamp(),
+                "success": response_data.get("success", False),
+                "message": response_data.get("message", ""),
+                "steps": response_data.get("steps", []),
+                "data": response_data.get("data")
+            }
+            self.operation_history.append(operation_record)
+            
+            return response_data
+        except json.JSONDecodeError:
+            return {"success": False, "error": "Invalid JSON response", "steps": []}
+
+    def format_step_summary(self, steps: List[Dict]) -> str:
+        """Format step information for user-friendly display."""
+        if not steps:
+            return ""
+        
+        summary = "\n📋 **Operation Steps:**\n"
+        for step in steps:
+            step_num = step.get("step", "?")
+            action = step.get("action", "Unknown action")
+            status = step.get("status", "unknown")
+            
+            # Status icons
+            status_icon = {
+                "completed": "✅",
+                "in_progress": "⏳", 
+                "failed": "❌",
+                "skipped": "⏭️"
+            }.get(status, "❓")
+            
+            summary += f"{status_icon} **Step {step_num}:** {action}"
+            
+            # Add additional metadata
+            if status == "completed":
+                if "count" in step:
+                    summary += f" (Found: {step['count']})"
+                elif "table_id" in step:
+                    summary += f" (ID: {step['table_id']})"
+                elif "generated_id" in step:
+                    summary += f" (Generated ID: {step['generated_id']})"
+                elif "user" in step:
+                    summary += f" (User: {step['user']})"
+                elif "table_name" in step:
+                    summary += f" (Table: {step['table_name']})"
+                    
+            elif status == "failed":
+                if "error" in step:
+                    summary += f" - **Error:** {step['error']}"
+                if "invalid_keys" in step:
+                    summary += f" - **Invalid keys:** {step['invalid_keys']}"
+                    
+            elif status == "skipped":
+                if "reason" in step:
+                    summary += f" - **Reason:** {step['reason']}"
+            
+            summary += "\n"
+        
+        return summary
+
+    def format_enhanced_response(self, response_data: Dict[str, Any], original_query: str) -> str:
+        """Format the complete response with steps and data."""
+        success = response_data.get("success", False)
+        message = response_data.get("message", "")
+        steps = response_data.get("steps", [])
+        data = response_data.get("data")
+        error = response_data.get("error")
+        
+        formatted_response = ""
+        
+        # Main result
+        if success:
+            formatted_response += f"✅ **Success:** {message}\n"
+        else:
+            formatted_response += f"❌ **Failed:** {error or message}\n"
+        
+        # Step summary
+        if steps:
+            formatted_response += self.format_step_summary(steps)
+        
+        # Data summary
+        if data and success:
+            formatted_response += "\n📊 **Result Data:**\n"
+            if isinstance(data, list) and len(data) > 0:
+                formatted_response += f"- Found {len(data)} items\n"
+                # Show first few items as preview
+                for i, item in enumerate(data[:3]):
+                    if isinstance(item, dict):
+                        name = item.get("table_name") or item.get("name") or f"Item {i+1}"
+                        formatted_response += f"  • {name}\n"
+            elif isinstance(data, dict):
+                if "table_id" in data:
+                    formatted_response += f"- **Table ID:** {data['table_id']}\n"
+                if "table_name" in data:
+                    formatted_response += f"- **Table Name:** {data['table_name']}\n"
+                if "headers" in data:
+                    formatted_response += f"- **Headers:** {', '.join(data['headers'])}\n"
+        
+        # Suggestions for failed operations
+        if not success and steps:
+            failed_step = next((s for s in steps if s.get("status") == "failed"), None)
+            if failed_step:
+                formatted_response += "\n💡 **Suggestions:**\n"
+                step_action = failed_step.get("action", "")
+                
+                if "user" in step_action.lower():
+                    formatted_response += "- Check if the user ID is correct\n"
+                elif "table" in step_action.lower():
+                    formatted_response += "- Verify the table exists and you have access\n"
+                elif "json" in step_action.lower():
+                    formatted_response += "- Check the JSON format of your data\n"
+                elif "validating" in step_action.lower():
+                    formatted_response += "- Review the input parameters and try again\n"
+        
+        return formatted_response
+
+    @staticmethod
+    def _get_timestamp():
+        """Get current timestamp."""
+        from datetime import datetime
+        return datetime.now().isoformat()
 
     async def connect(self):
         config = self.read_config_json()
@@ -168,6 +307,7 @@ class ExpenseMCPClient:
                 context += f"\nContext: {query_data['context_type']}"
         else:
             context = f"Query: {query_data}"
+            query_text = str(query_data)
 
         full_prompt = f"""{PROMPT_TEMPLATE}
 
@@ -175,36 +315,93 @@ USER CONTEXT:
 {context}
 
 Process this request and use the appropriate tools to help the user.
+When you receive tool responses, look for the 'steps' array and provide detailed feedback about the operation progress.
 """
 
         try:
             response = await self.agent.ainvoke({"messages": full_prompt}, {"recursion_limit": 100})
 
+            # Extract response content
+            final_response = ""
             if isinstance(response, dict) and "messages" in response:
-                # Extract the last AI message
                 messages = response["messages"]
                 for message in reversed(messages):
                     if hasattr(message, 'content'):
-                        return message.content
-                return str(response)
+                        final_response = message.content
+                        break
+                if not final_response:
+                    final_response = str(response)
             elif hasattr(response, 'content'):
-                return response.content
+                final_response = response.content
             else:
-                return str(response)
+                final_response = str(response)
+
+            # Try to enhance the response if it contains tool results
+            try:
+                if "{" in final_response and "}" in final_response:
+                    # Look for JSON-like structures that might be tool responses
+                    import re
+                    json_matches = re.findall(r'\{[^{}]*"success"[^{}]*\}', final_response)
+                    for json_match in json_matches:
+                        try:
+                            tool_response = json.loads(json_match)
+                            enhanced = self.format_enhanced_response(tool_response, query_text)
+                            final_response = final_response.replace(json_match, enhanced)
+                        except:
+                            continue
+            except:
+                pass  # If enhancement fails, return original response
+
+            return final_response
 
         except Exception as e:
             error_msg = f"❌ Error processing query: {str(e)}"
             print(error_msg)
             return error_msg
 
+    def get_operation_history(self, limit: int = 10) -> List[Dict]:
+        """Get recent operation history."""
+        return self.operation_history[-limit:] if self.operation_history else []
+
+    def get_operation_stats(self) -> Dict[str, Any]:
+        """Get statistics about operations."""
+        if not self.operation_history:
+            return {"total": 0, "success_rate": 0}
+        
+        total = len(self.operation_history)
+        successful = sum(1 for op in self.operation_history if op.get("success", False))
+        
+        return {
+            "total": total,
+            "successful": successful,
+            "failed": total - successful,
+            "success_rate": (successful / total) * 100 if total > 0 else 0
+        }
+
     async def run_interactive_loop(self):
         if not self.agent:
             await self.connect()
-        print("\n🚀 Finance MCP Client Ready! Type 'quit' to exit.")
+        print("\n🚀 Enhanced Finance MCP Client Ready! Type 'quit' to exit.")
+        print("💡 New features: Detailed step tracking, operation history, enhanced error reporting")
+        
         while True:
             query = input("\nQuery: ").strip()
             if query.lower() in {"quit", "exit"}:
                 break
+            elif query.lower() == "history":
+                history = self.get_operation_history()
+                print(f"\n📜 Recent Operations ({len(history)}):")
+                for i, op in enumerate(history, 1):
+                    status = "✅" if op["success"] else "❌"
+                    print(f"{i}. {status} {op['message']} ({op['timestamp']})")
+                continue
+            elif query.lower() == "stats":
+                stats = self.get_operation_stats()
+                print(f"\n📊 Operation Statistics:")
+                print(f"Total operations: {stats['total']}")
+                print(f"Success rate: {stats['success_rate']:.1f}%")
+                continue
+                
             print("\n⚙️ Processing...")
             # Simulate query with user_id for testing
             query_data = {"query": query, "user_id": 1}
