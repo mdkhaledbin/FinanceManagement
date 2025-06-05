@@ -1,9 +1,9 @@
 """URL patterns for MCP endpoints."""
 from django.urls import path
-from .views import  AgentAPIView
+from .views import AgentAPIView, AgentStreamingAPIView, AgentHistoryAPIView
 
 urlpatterns = [
-    path('query/', AgentAPIView.as_view()),#/agent/query/
-    # path('query/', MCPQueryView.as_view(), name='mcp-query'),
-    # path('execute-tool/', MCPToolExecuteView.as_view(), name='mcp-execute-tool'),
+    path('query/', AgentAPIView.as_view(), name='agent_query'),           # /agent/query/
+    path('streaming/', AgentStreamingAPIView.as_view(), name='agent_streaming'),  # /agent/streaming/
+    path('history/', AgentHistoryAPIView.as_view(), name='agent_history'),        # /agent/history/
 ] 

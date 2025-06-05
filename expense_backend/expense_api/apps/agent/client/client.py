@@ -23,52 +23,142 @@ def debug_print(*args, **kwargs):
 
 
 PROMPT_TEMPLATE = """
-You are an intelligent expense tracker and financial data assistant.
+You are an advanced intelligent data management and tracking assistant with sophisticated analysis capabilities.
 
-Your job is to understand the user's natural language queries and invoke the appropriate finance management tools.
+Your job is to understand natural language queries and intelligently manage any type of data through smart analysis and organization.
 
-You have access to the following tools for managing financial data:
+You have access to the following tools for managing data:
 
 1. `get_user_tables(user_id: int)` - Get all tables belonging to a user
-2. `create_table(user_id: int, table_name: str, description: str, headers: list)` - Create new expense/budget table
-3. `add_table_row(table_id: int, row_data: dict)` - Add expense entry to a table
-4. `update_table_row(table_id: int, row_id: str, new_data: dict)` - Update existing expense entry
-5. `delete_table_row(table_id: int, row_id: str)` - Delete an expense entry
+2. `create_table(user_id: int, table_name: str, description: str, headers: list)` - Create new data tracking table
+3. `add_table_row(table_id: int, row_data: dict)` - Add data entry to a table
+4. `update_table_row(table_id: int, row_id: str, new_data: dict)` - Update existing data entry
+5. `delete_table_row(table_id: int, row_id: str)` - Delete a data entry
 6. `get_table_content(user_id: int, table_id?: int)` - Get table data for analysis
 7. `add_table_column(table_id: int, header: str)` - Add new column to table
 8. `delete_table_columns(table_id: int, new_headers: list)` - Remove columns from table
 9. `update_table_metadata(user_id: int, table_id: int, ...)` - Update table name/description
 10. `delete_table(user_id: int, table_id: int)` - Delete entire table
 
-Instructions:
-- Parse natural language queries about expenses, budgets, and financial tracking
-- Extract relevant information like amounts, categories, dates, descriptions
-- Use appropriate tools to perform requested operations
-- When adding expenses, create proper row data with appropriate headers
-- For Bengali/mixed language queries, understand the intent and extract structured data
-- Always include user_id in operations (this will be provided in the query data)
-- Pay attention to the detailed step information returned by each tool
-- Provide comprehensive feedback including operation steps when available
+## ADVANCED INTELLIGENCE INSTRUCTIONS:
 
-The tools now return enhanced responses with step-by-step information:
-- Each operation includes a "steps" array showing progress
-- Steps have status: "in_progress", "completed", "failed", "skipped"
-- Failed steps include error details for better debugging
-- Successful operations include metadata like counts, IDs, and names
+### 🧠 DATA ANALYSIS & PATTERN RECOGNITION:
+- Analyze user's data patterns and tracking behaviors
+- Identify categories, frequency, trends, and seasonal patterns
+- Detect anomalies and suggest optimizations
+- Recognize recurring entries and suggest automation
+- Provide insights on data organization and tracking habits
 
-Example Queries:
-"ami gotokal sylhet e 100 tk khoroch korechi" 
-→ Extract: amount=100, location/category=sylhet, date=yesterday
-→ Tool: add_table_row with appropriate table_id and structured data
+### 🎯 INTELLIGENT TABLE MATCHING:
+- **Step 1**: Always get user's existing tables first with `get_user_tables(user_id)`
+- **Step 2**: Analyze table names, descriptions, and purposes to find best matches
+- **Step 3**: Use semantic similarity to match query intent with table purpose
+- **Step 4**: Consider table usage patterns and relevance scores
 
-"Show me my expenses for this month"
-→ Tool: get_table_content to retrieve and analyze data
+**Table Matching Logic:**
+- Match data type (books, inventory, expenses, habits, projects, collections, etc.)
+- Match tracking period (daily, weekly, monthly, yearly, event-based)
+- Match context/location (home, work, library, specific places)
+- Match measurement units (count, amount, rating, status, etc.)
+- Consider table creation date and usage frequency
 
-"Create a new budget table for transport expenses"
-→ Tool: create_table with appropriate headers like [Date, Amount, Description, Vehicle]
+### 📊 SMART CONTENT ANALYSIS:
+- Get table content with `get_table_content()` to understand data structure
+- Analyze existing column headers and data patterns
+- Suggest new columns if current structure is insufficient
+- Recommend data standardization and organization improvements
+- Identify missing or inconsistent data entries
 
-Always provide helpful responses, explain the steps taken, and confirm successful operations.
-If any step fails, explain what went wrong and suggest next actions.
+### 🔄 ADAPTIVE DECISION MAKING:
+1. **For Data Recording:**
+   - Find most relevant existing table based on type/category/context
+   - If no perfect match, find closest table and adapt structure
+   - Only create new table if no reasonable existing option
+   - Suggest merging similar tables if too many exist
+
+2. **For Data Retrieval:**
+   - Analyze which tables contain relevant information
+   - Combine data from multiple tables if needed
+   - Provide comprehensive analysis with trends and insights
+   - Generate smart filters based on query intent
+
+3. **For Data Organization:**
+   - Analyze data patterns to suggest better organization
+   - Compare current data with historical patterns
+   - Identify areas for improvement
+   - Predict future data needs based on trends
+
+### 🌐 MULTI-LANGUAGE & CONTEXT INTELLIGENCE:
+- Parse Bengali, English, and mixed language queries intelligently
+- Extract context-specific information (dates: ajk=today, gotokal=yesterday)
+- Understand different tracking terminologies and local contexts
+- Handle various measurement units and counting systems
+
+### 📈 ENHANCED QUERY PROCESSING:
+
+**Example Smart Processing:**
+
+"ami ajk 5 ta boi porechi" (I read 5 books today)
+→ **Analysis:** Bengali data entry, count=5, item=books, date=today
+→ **Table Search:** Look for tables with keywords: "book", "reading", "library", "daily"
+→ **Best Match Logic:** 
+   - Priority 1: "Book Reading Log" or "Reading Tracker"
+   - Priority 2: "Daily Activities" with book column
+   - Priority 3: General activity/habit tracker
+→ **Action:** Add to best matching table with proper categorization
+
+"ami inventory te 50 ta pen ache" (I have 50 pens in inventory)
+→ **Analysis:** Inventory tracking, count=50, item=pens, type=stock
+→ **Table Search:** Find tables with "inventory", "stock", "supplies"
+→ **Smart Analysis:** Track inventory levels, suggest reorder points
+→ **Action:** Update or add inventory record with quantity tracking
+
+"show me my book reading progress this month"
+→ **Analysis:** Data retrieval request, category=books, period=current month
+→ **Table Search:** Find tables containing book/reading data
+→ **Smart Analysis:** Calculate total books, reading rate, compare with goals
+→ **Insights:** Provide reading statistics, suggest reading goals
+
+"create table for tracking gym workouts"
+→ **Analysis:** New table creation, category=fitness, type=workout tracking
+→ **Smart Suggestions:** Recommend columns based on workout tracking best practices
+→ **Table Design:** [Date, Exercise, Sets, Reps, Weight, Duration, Notes]
+
+### 🎯 RESPONSE INTELLIGENCE:
+- Always explain WHY a particular table was selected
+- Provide confidence scores for matches (High/Medium/Low)
+- Suggest improvements to data structure when relevant
+- Give proactive data organization insights and recommendations
+- Warn about potential issues (duplicate entries, inconsistent data, etc.)
+
+### 📋 STEP-BY-STEP PROCESSING:
+1. **Parse & Understand:** Extract intent, entities, and context from any domain
+2. **Analyze Existing Data:** Get tables and analyze data patterns
+3. **Find Best Match:** Use intelligent matching algorithms for any data type
+4. **Execute Action:** Perform requested operation with domain-specific best practices
+5. **Provide Insights:** Give meaningful feedback and data organization suggestions
+6. **Learn & Adapt:** Remember user preferences and tracking patterns
+
+### 🏷️ SUPPORTED DATA TYPES & USE CASES:
+- **Personal Tracking:** Books read, movies watched, habits, goals, mood
+- **Inventory Management:** Stock counts, supplies, collections, assets
+- **Financial Records:** Expenses, income, budgets, savings, investments
+- **Project Management:** Tasks, milestones, time tracking, progress
+- **Health & Fitness:** Workouts, meals, weight, sleep, medications
+- **Academic:** Study hours, grades, assignments, course progress
+- **Professional:** Work hours, meetings, deadlines, performance metrics
+- **Household:** Chores, maintenance, bills, family activities
+- **Collections:** Books, movies, games, stamps, coins, anything collectible
+- **Social:** Events, contacts, relationships, social activities
+
+Always provide comprehensive feedback including:
+- Why specific tables were chosen for the data type
+- Data organization and tracking insights
+- Suggestions for better data management
+- Confidence levels in recommendations
+- Next best actions for improved tracking
+
+Remember: You are a universal data management assistant - help users track, organize, and analyze ANY type of information efficiently!
 """
 
 
@@ -167,7 +257,7 @@ class ExpenseMCPClient:
         return summary
 
     def format_enhanced_response(self, response_data: Dict[str, Any], original_query: str) -> str:
-        """Format the complete response with steps and data."""
+        """Format the complete response with intelligent analysis and insights."""
         success = response_data.get("success", False)
         message = response_data.get("message", "")
         steps = response_data.get("steps", [])
@@ -176,51 +266,257 @@ class ExpenseMCPClient:
         
         formatted_response = ""
         
-        # Main result
+        # Main result with intelligence indicator
         if success:
-            formatted_response += f"✅ **Success:** {message}\n"
+            formatted_response += f"🎯 **Intelligent Analysis Complete:** {message}\n"
         else:
-            formatted_response += f"❌ **Failed:** {error or message}\n"
+            formatted_response += f"❌ **Analysis Failed:** {error or message}\n"
         
-        # Step summary
+        # Step summary with smart insights
         if steps:
-            formatted_response += self.format_step_summary(steps)
+            formatted_response += self.format_step_summary_enhanced(steps, original_query)
         
-        # Data summary
+        # Intelligent data analysis
         if data and success:
-            formatted_response += "\n📊 **Result Data:**\n"
+            formatted_response += "\n🧠 **AI Analysis Results:**\n"
+            confidence_score = self._calculate_confidence_score(response_data, original_query)
+            formatted_response += f"- **Confidence Level:** {confidence_score}\n"
+            
             if isinstance(data, list) and len(data) > 0:
-                formatted_response += f"- Found {len(data)} items\n"
-                # Show first few items as preview
+                formatted_response += f"- **Tables Analyzed:** {len(data)} tables\n"
+                
+                # Analyze table relevance
+                best_match = self._find_best_table_match(data, original_query)
+                if best_match:
+                    formatted_response += f"- **Best Match:** {best_match['name']} (Relevance: {best_match['score']}%)\n"
+                
+                # Show table analysis
                 for i, item in enumerate(data[:3]):
                     if isinstance(item, dict):
-                        name = item.get("table_name") or item.get("name") or f"Item {i+1}"
-                        formatted_response += f"  • {name}\n"
+                        table_name = item.get("table_name") or item.get("name") or f"Table {i+1}"
+                        relevance = self._calculate_table_relevance(item, original_query)
+                        formatted_response += f"  • {table_name} - Relevance: {relevance}%\n"
+                        
             elif isinstance(data, dict):
                 if "table_id" in data:
-                    formatted_response += f"- **Table ID:** {data['table_id']}\n"
+                    formatted_response += f"- **Target Table ID:** {data['table_id']}\n"
                 if "table_name" in data:
-                    formatted_response += f"- **Table Name:** {data['table_name']}\n"
+                    formatted_response += f"- **Table Selected:** {data['table_name']}\n"
                 if "headers" in data:
-                    formatted_response += f"- **Headers:** {', '.join(data['headers'])}\n"
+                    formatted_response += f"- **Data Structure:** {', '.join(data['headers'])}\n"
         
-        # Suggestions for failed operations
-        if not success and steps:
-            failed_step = next((s for s in steps if s.get("status") == "failed"), None)
-            if failed_step:
-                formatted_response += "\n💡 **Suggestions:**\n"
-                step_action = failed_step.get("action", "")
-                
-                if "user" in step_action.lower():
-                    formatted_response += "- Check if the user ID is correct\n"
-                elif "table" in step_action.lower():
-                    formatted_response += "- Verify the table exists and you have access\n"
-                elif "json" in step_action.lower():
-                    formatted_response += "- Check the JSON format of your data\n"
-                elif "validating" in step_action.lower():
-                    formatted_response += "- Review the input parameters and try again\n"
+        # Smart recommendations
+        recommendations = self._generate_smart_recommendations(response_data, original_query)
+        if recommendations:
+            formatted_response += "\n💡 **Smart Recommendations:**\n"
+            for rec in recommendations:
+                formatted_response += f"- {rec}\n"
+        
+        # Financial insights
+        insights = self._generate_financial_insights(response_data, original_query)
+        if insights:
+            formatted_response += "\n📊 **Financial Insights:**\n"
+            for insight in insights:
+                formatted_response += f"- {insight}\n"
         
         return formatted_response
+
+    def format_step_summary_enhanced(self, steps: List[Dict], query: str) -> str:
+        """Enhanced step summary with intelligence indicators."""
+        if not steps:
+            return ""
+        
+        summary = "\n📋 **Intelligent Processing Steps:**\n"
+        for step in steps:
+            step_num = step.get("step", "?")
+            action = step.get("action", "Unknown action")
+            status = step.get("status", "unknown")
+            
+            # Enhanced status icons with intelligence
+            status_icon = {
+                "completed": "🎯",  # Smart completion
+                "in_progress": "🧠",  # AI thinking
+                "failed": "⚠️",
+                "skipped": "⏭️"
+            }.get(status, "❓")
+            
+            summary += f"{status_icon} **Step {step_num}:** {action}"
+            
+            # Add intelligence metadata
+            if status == "completed":
+                if "analysis_score" in step:
+                    summary += f" (Analysis Score: {step['analysis_score']}%)"
+                elif "confidence" in step:
+                    summary += f" (Confidence: {step['confidence']}%)"
+                elif "count" in step:
+                    summary += f" (Found: {step['count']} items)"
+                elif "table_id" in step:
+                    summary += f" (Selected: Table #{step['table_id']})"
+                elif "match_score" in step:
+                    summary += f" (Match: {step['match_score']}%)"
+                    
+            elif status == "failed":
+                if "error" in step:
+                    summary += f" - **Issue:** {step['error']}"
+                if "suggestion" in step:
+                    summary += f" - **Suggestion:** {step['suggestion']}"
+                    
+            summary += "\n"
+        
+        return summary
+
+    def _calculate_confidence_score(self, response_data: Dict, query: str) -> str:
+        """Calculate AI confidence score based on response quality."""
+        score = 85  # Base confidence
+        
+        # Adjust based on data quality
+        if response_data.get("success", False):
+            score += 10
+        else:
+            score -= 20
+            
+        # Adjust based on step completion
+        steps = response_data.get("steps", [])
+        if steps:
+            completed_steps = sum(1 for step in steps if step.get("status") == "completed")
+            total_steps = len(steps)
+            if total_steps > 0:
+                completion_rate = (completed_steps / total_steps) * 100
+                score = (score + completion_rate) / 2
+        
+        # Classify confidence
+        if score >= 90:
+            return "Very High (90%+)"
+        elif score >= 75:
+            return "High (75-89%)"
+        elif score >= 60:
+            return "Medium (60-74%)"
+        else:
+            return "Low (<60%)"
+
+    def _find_best_table_match(self, tables: List[Dict], query: str) -> Dict:
+        """Find the best matching table based on semantic analysis."""
+        if not tables:
+            return None
+            
+        best_match = None
+        highest_score = 0
+        
+        # Keywords for different categories
+        query_lower = query.lower()
+        expense_keywords = ['khoroch', 'expense', 'cost', 'spent', 'buy', 'purchase']
+        location_keywords = ['sylhet', 'dhaka', 'chittagong', 'travel']
+        time_keywords = ['daily', 'monthly', 'yearly', 'ajk', 'today']
+        
+        for table in tables:
+            if not isinstance(table, dict):
+                continue
+                
+            table_name = table.get("table_name", "").lower()
+            description = table.get("description", "").lower()
+            
+            score = 0
+            
+            # Check for expense-related matches
+            if any(keyword in query_lower for keyword in expense_keywords):
+                if any(keyword in table_name for keyword in expense_keywords):
+                    score += 40
+                if 'expense' in table_name or 'cost' in table_name:
+                    score += 30
+                    
+            # Check for location matches
+            for location in location_keywords:
+                if location in query_lower and location in table_name:
+                    score += 35
+                    
+            # Check for time period matches
+            for time_word in time_keywords:
+                if time_word in query_lower and time_word in table_name:
+                    score += 25
+                    
+            # General name similarity
+            if 'daily' in table_name and ('ajk' in query_lower or 'today' in query_lower):
+                score += 20
+                
+            if score > highest_score:
+                highest_score = score
+                best_match = {
+                    "name": table.get("table_name", "Unknown"),
+                    "score": min(score, 95),  # Cap at 95%
+                    "id": table.get("id")
+                }
+        
+        return best_match
+
+    def _calculate_table_relevance(self, table: Dict, query: str) -> int:
+        """Calculate relevance percentage for a specific table."""
+        if not isinstance(table, dict):
+            return 0
+            
+        table_name = table.get("table_name", "").lower()
+        query_lower = query.lower()
+        
+        relevance = 20  # Base relevance
+        
+        # Keyword matching
+        expense_words = ['expense', 'khoroch', 'cost']
+        location_words = ['sylhet', 'dhaka', 'travel']
+        
+        for word in expense_words:
+            if word in query_lower and word in table_name:
+                relevance += 25
+                
+        for word in location_words:
+            if word in query_lower and word in table_name:
+                relevance += 30
+                
+        # Time relevance
+        if ('ajk' in query_lower or 'today' in query_lower) and 'daily' in table_name:
+            relevance += 20
+            
+        return min(relevance, 95)
+
+    def _generate_smart_recommendations(self, response_data: Dict, query: str) -> List[str]:
+        """Generate intelligent recommendations based on the operation."""
+        recommendations = []
+        
+        if response_data.get("success", False):
+            # Success recommendations
+            if 'expense' in query.lower() or 'khoroch' in query.lower():
+                recommendations.append("Set up budget alerts for this category")
+                recommendations.append("Track similar expenses to identify patterns")
+                recommendations.append("Consider using expense categories for better analysis")
+            
+            if 'sylhet' in query.lower() or 'travel' in query.lower():
+                recommendations.append("Create a dedicated travel budget tracker")
+                recommendations.append("Compare travel costs across different destinations")
+                
+        else:
+            # Failure recommendations
+            recommendations.append("Try rephrasing your query with more specific details")
+            recommendations.append("Check if the table structure matches your data")
+            recommendations.append("Consider creating a new table for this expense type")
+            
+        return recommendations[:3]  # Limit to top 3
+
+    def _generate_financial_insights(self, response_data: Dict, query: str) -> List[str]:
+        """Generate financial insights based on the operation."""
+        insights = []
+        
+        # Amount-based insights
+        if '100' in query and 'tk' in query:
+            insights.append("Small expense recorded - good for daily tracking")
+            insights.append("Consider setting daily spending limits")
+            
+        # Location-based insights
+        if 'sylhet' in query.lower():
+            insights.append("Travel expenses detected - track accommodation and food separately")
+            
+        # Pattern insights
+        if response_data.get("success", False):
+            insights.append("Regular expense tracking builds better financial habits")
+            
+        return insights[:2]  # Limit to top 2
 
     @staticmethod
     def _get_timestamp():
@@ -280,13 +576,35 @@ class ExpenseMCPClient:
         return self.agent
 
     async def disconnect(self):
+        """Properly disconnect all MCP sessions and cleanup resources."""
         if self.exit_stack:
-            await self.exit_stack.aclose()
-            self.exit_stack = None
-            self.client = None
-            self.available_tools = []
-            self.sessions = {}
-            self.agent = None
+            try:
+                # Close all sessions first
+                for session_name, session in self.sessions.items():
+                    try:
+                        debug_print(f"Closing session: {session_name}")
+                        # Don't await session close as it might be already closed
+                    except Exception as e:
+                        debug_print(f"Warning: Error closing session {session_name}: {e}")
+                
+                # Clear sessions before closing exit stack
+                self.sessions.clear()
+                
+                # Use aclose instead of manual __aexit__
+                await self.exit_stack.aclose()
+                debug_print("✅ Exit stack closed successfully")
+                
+            except Exception as e:
+                debug_print(f"Warning: Error during disconnect: {e}")
+                # Continue with cleanup even if there are errors
+            finally:
+                # Reset all state regardless of errors
+                self.exit_stack = None
+                self.client = None
+                self.available_tools = []
+                self.sessions = {}
+                self.agent = None
+                
             return "✅ Disconnected"
         return "ℹ️ Not connected"
 
@@ -294,7 +612,11 @@ class ExpenseMCPClient:
         if not self.agent:
             await self.connect()
         if not self.agent:
-            return "❌ Agent not initialized"
+            return {
+                "success": False,
+                "error": "Agent not initialized",
+                "message": "❌ Agent not initialized"
+            }
 
         # Format the query with context
         if isinstance(query_data, dict):
@@ -323,8 +645,11 @@ When you receive tool responses, look for the 'steps' array and provide detailed
 
             # Extract response content
             final_response = ""
+            raw_response = None
+            
             if isinstance(response, dict) and "messages" in response:
                 messages = response["messages"]
+                raw_response = response
                 for message in reversed(messages):
                     if hasattr(message, 'content'):
                         final_response = message.content
@@ -333,31 +658,96 @@ When you receive tool responses, look for the 'steps' array and provide detailed
                     final_response = str(response)
             elif hasattr(response, 'content'):
                 final_response = response.content
+                raw_response = response
             else:
                 final_response = str(response)
+                raw_response = response
 
-            # Try to enhance the response if it contains tool results
-            try:
-                if "{" in final_response and "}" in final_response:
-                    # Look for JSON-like structures that might be tool responses
-                    import re
-                    json_matches = re.findall(r'\{[^{}]*"success"[^{}]*\}', final_response)
-                    for json_match in json_matches:
-                        try:
-                            tool_response = json.loads(json_match)
-                            enhanced = self.format_enhanced_response(tool_response, query_text)
-                            final_response = final_response.replace(json_match, enhanced)
-                        except:
-                            continue
-            except:
-                pass  # If enhancement fails, return original response
-
-            return final_response
+            # Try to extract structured tool responses
+            structured_data = self._extract_structured_response(final_response, query_text)
+            
+            # Return enhanced response structure
+            return {
+                "success": True,
+                "message": "Query processed successfully",
+                "query": query_text,
+                "response": final_response,
+                "formatted_response": final_response,
+                "raw_response": raw_response,
+                "operation_stats": self.get_operation_stats(),
+                **structured_data  # Merge any extracted structured data
+            }
 
         except Exception as e:
             error_msg = f"❌ Error processing query: {str(e)}"
             print(error_msg)
-            return error_msg
+            
+            # Record failed operation
+            self.operation_history.append({
+                "timestamp": self._get_timestamp(),
+                "success": False,
+                "message": error_msg,
+                "query": query_text,
+                "error": str(e),
+                "steps": [{
+                    "step": 1,
+                    "action": "Processing query",
+                    "status": "failed",
+                    "error": str(e)
+                }]
+            })
+            
+            return {
+                "success": False,
+                "error": str(e),
+                "message": error_msg,
+                "query": query_text,
+                "steps": [{
+                    "step": 1,
+                    "action": "Processing query", 
+                    "status": "failed",
+                    "error": str(e)
+                }],
+                "operation_stats": self.get_operation_stats()
+            }
+
+    def _extract_structured_response(self, response_text: str, query: str) -> Dict[str, Any]:
+        """Extract structured data from response text."""
+        structured_data = {}
+        
+        try:
+            # Look for JSON-like structures in the response
+            import re
+            json_matches = re.findall(r'\{[^{}]*"success"[^{}]*\}', response_text)
+            
+            for json_match in json_matches:
+                try:
+                    tool_response = json.loads(json_match)
+                    if "steps" in tool_response:
+                        structured_data["steps"] = tool_response["steps"]
+                    if "data" in tool_response:
+                        structured_data["data"] = tool_response["data"]
+                    if "success" in tool_response:
+                        structured_data["tool_success"] = tool_response["success"]
+                    break  # Use first valid JSON found
+                except json.JSONDecodeError:
+                    continue
+            
+            # Check for operation indicators in text
+            if "✅" in response_text:
+                structured_data["contains_success"] = True
+            if "❌" in response_text:
+                structured_data["contains_error"] = True
+            if "📋" in response_text:
+                structured_data["contains_steps"] = True
+            if "📊" in response_text:
+                structured_data["contains_data"] = True
+                
+        except Exception as e:
+            # If extraction fails, just return empty dict
+            pass
+            
+        return structured_data
 
     def get_operation_history(self, limit: int = 10) -> List[Dict]:
         """Get recent operation history."""
@@ -408,3 +798,25 @@ When you receive tool responses, look for the 'steps' array and provide detailed
             response = await self.process_query(query_data)
             print("\n📤 Response:")
             print(response)
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.disconnect()
+        return False
+
+    @staticmethod
+    async def create_and_run_query(query_data, anthropic_api_key=None):
+        """Static method to create client, run query, and cleanup in one go."""
+        async with ExpenseMCPClient(anthropic_api_key) as client:
+            if not client.agent:
+                return {
+                    "success": False,
+                    "error": "Failed to initialize MCP client",
+                    "message": "Could not connect to the finance management tools"
+                }
+            return await client.process_query(query_data)

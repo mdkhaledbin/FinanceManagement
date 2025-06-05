@@ -22,12 +22,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'expense_api.apps.agent',
-    'expense_api.apps.llm',
-    'expense_api.apps.user_auth',
     'rest_framework',
     'rest_framework_simplejwt',
     'expense_api.apps.FinanceManagement',
+    'expense_api.apps.agent',
+    'expense_api.apps.user_auth',
 ]
 
 MIDDLEWARE = [
