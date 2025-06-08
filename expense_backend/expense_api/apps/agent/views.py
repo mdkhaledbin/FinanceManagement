@@ -38,111 +38,24 @@ class AgentAPIView(APIView):
                 query_data['table_id'] = request.data['table_id']
             if 'context_type' in request.data:
                 query_data['context_type'] = request.data['context_type']
-            
-            # Check if streaming format is requested
-            streaming_requested = request.data.get('streaming', False)
-            format_type = request.data.get('format', 'standard')  # standard, streaming, thinking
 
-            # Run agent with user ID and request data
+            # Run agent and get response
             response_obj = async_to_sync(self.run_agent_simple)(query_data)
             
-            # Prepare response with enhanced data
-            data = {
-                "query": query_data.get("query", ""),
-                "response": response_obj
-            }
+            # Process and clean the response
+            cleaned_response = self._clean_response(response_obj)
             
-            output_serializer = ResponseSerializer(data)
-            response_data = output_serializer.data
-            
-            # If streaming or thinking format requested, modify the response
-            if streaming_requested or format_type in ['streaming', 'thinking']:
-                if format_type == 'thinking' and response_data.get('thinking_process'):
-                    # Return just the thinking process for thinking format
-                    return Response({
-                        "query": query_data.get("query", ""),
-                        "format": "thinking",
-                        "thinking_process": response_data['thinking_process'],
-                        "final_response": response_data['response']
-                    }, status=status.HTTP_200_OK)
-                    
-                elif format_type == 'streaming' and response_data.get('streaming_format'):
-                    # Return streaming format
-                    return Response({
-                        "query": query_data.get("query", ""),
-                        "format": "streaming", 
-                        "streaming_data": response_data['streaming_format'],
-                        "final_response": response_data['response']
-                    }, status=status.HTTP_200_OK)
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response(cleaned_response, status=status.HTTP_200_OK)
             
         except Exception as e:
-            # Enhanced error response
-            error_response = {
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "query": request.data.get('query', 'Unknown'),
-                "user_id": user_id if 'user_id' in locals() else 'Unknown'
-            }
-            return Response(error_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    async def run_agent(self, query_data):
-        """Run the agent with proper connection lifecycle management using context manager."""
-        try:
-            # Use context manager for proper connection lifecycle
-            async with ExpenseMCPClient() as client:
-                if not client.agent:
-                    return {
-                        "success": False,
-                        "error": "Failed to initialize MCP client",
-                        "message": "Could not connect to the finance management tools"
-                    }
-                
-                # Process the query
-                result = await client.process_query(query_data)
-                
-                # Check if result is already enhanced format
-                if isinstance(result, dict) and "success" in result:
-                    return result
-                
-                # Wrap simple string responses in enhanced format
-                return {
-                    "success": True,
-                    "message": "Query processed successfully",
-                    "response": result,
-                    "formatted_response": result
-                }
-            
-        except ConnectionError as e:
-            return {
-                "success": False,
-                "error": f"Connection error: {str(e)}",
-                "message": "Failed to connect to finance management tools"
-            }
-        except TimeoutError as e:
-            return {
-                "success": False,
-                "error": f"Timeout error: {str(e)}",
-                "message": "Request timed out, please try again"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "An unexpected error occurred while processing your request"
-            }
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def run_agent_simple(self, query_data):
-        """Simplified agent runner using static method for optimal connection management."""
+        """Simplified agent runner that returns raw response."""
         try:
             return await ExpenseMCPClient.create_and_run_query(query_data)
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "message": f"Error processing query: {str(e)}"
-            }
+            return {"error": str(e)}
 
     def get(self, request):
         """Handle GET requests for basic status information."""
@@ -154,22 +67,85 @@ class AgentAPIView(APIView):
             
             user_id = decode_refresh_token(refresh_token)
             
-            # Return basic status without maintaining connections
-            response_data = {
+            return Response({
                 "user_id": user_id,
-                "service_status": "active",
-                "message": "Finance AI Agent is ready to process queries"
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+                "status": "active"
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _clean_response(self, response_obj):
+        """Clean the response by removing step prefixes and extracting tool information."""
+        import re
+        
+        # Initialize the cleaned response structure
+        cleaned_response = {
+            "response": "",
+            "tools_called": []
+        }
+        
+        # Extract the main response text
+        if isinstance(response_obj, dict):
+            if 'response' in response_obj:
+                response_text = str(response_obj['response'])
+            elif 'message' in response_obj:
+                response_text = str(response_obj['message'])
+            else:
+                response_text = str(response_obj)
+            
+            # Extract tools information if available
+            if 'raw_response' in response_obj:
+                cleaned_response['tools_called'] = self._extract_tools_from_raw_response(response_obj['raw_response'])
+        else:
+            response_text = str(response_obj)
+        
+        # Remove step prefixes (Step 1:, Step 2:, etc.) from the beginning
+        response_text = re.sub(r'^Step \d+:\s*[^\n]*\n?', '', response_text, flags=re.MULTILINE)
+        
+        # Also remove any remaining step patterns that might be at the start
+        response_text = re.sub(r'^Step \d+.*?\n', '', response_text)
+        
+        # Clean up extra whitespace and newlines
+        response_text = response_text.strip()
+        
+        cleaned_response['response'] = response_text
+        
+        return cleaned_response
+    
+    def _extract_tools_from_raw_response(self, raw_response):
+        """Extract tool information from raw response."""
+        tools_called = []
+        
+        try:
+            if isinstance(raw_response, dict) and 'messages' in raw_response:
+                messages = raw_response['messages']
+                
+                for message in messages:
+                    if isinstance(message, list) and len(message) > 9:
+                        # Check if this is an AI message with tool calls
+                        if len(message) > 5 and message[5][1] == "ai":
+                            # Look for tool calls in the message
+                            if len(message) > 9 and message[9][0] == "tool_calls":
+                                tool_calls = message[9][1]
+                                
+                                for tool_call in tool_calls:
+                                    if isinstance(tool_call, dict) and 'name' in tool_call:
+                                        tool_info = {
+                                            'name': tool_call['name'],
+                                            'args': tool_call.get('args', {})
+                                        }
+                                        tools_called.append(tool_info)
+        except Exception:
+            # If we can't extract tools, just return empty list
+            pass
+        
+        return tools_called
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentHistoryAPIView(APIView):
-    """Separate endpoint for operation history management."""
+    """Simple endpoint for operation history."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
 
@@ -183,27 +159,10 @@ class AgentHistoryAPIView(APIView):
             
             user_id = decode_refresh_token(refresh_token)
             
-            # Get query parameters
-            limit = int(request.GET.get('limit', 10))
-            include_stats = request.GET.get('include_stats', 'false').lower() == 'true'
-            
-            # For now, return placeholder data since we can't maintain persistent client state
-            # In a production environment, this would be stored in a database
-            response_data = {
+            return Response({
                 "user_id": user_id,
-                "operation_history": [],
-                "message": "Operation history tracking is available during active sessions"
-            }
-            
-            if include_stats:
-                response_data["operation_stats"] = {
-                    "total": 0,
-                    "successful": 0,
-                    "failed": 0,
-                    "success_rate": 0
-                }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+                "history": []
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -211,12 +170,12 @@ class AgentHistoryAPIView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentStreamingAPIView(APIView):
-    """Endpoint for streaming/thinking format responses."""
+    """Simple streaming endpoint that returns unformatted responses."""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
 
     def post(self, request):
-        """Handle streaming format requests."""
+        """Handle requests with simple response."""
         try:
             # Get user ID from token
             refresh_token = request.COOKIES.get('refresh_token')
@@ -239,108 +198,88 @@ class AgentStreamingAPIView(APIView):
                 query_data['table_id'] = request.data['table_id']
             if 'context_type' in request.data:
                 query_data['context_type'] = request.data['context_type']
-
-            # Get format preference
-            format_type = request.data.get('format', 'streaming')  # streaming or thinking
             
-            # Run agent
-            response_obj = async_to_sync(self._run_streaming_agent)(query_data)
+            # Run agent and return simple response
+            response_obj = async_to_sync(self._run_agent)(query_data)
             
-            # Prepare streaming response
-            data = {
-                "query": query_data.get("query", ""),
-                "response": response_obj
-            }
+            # Process and clean the response
+            cleaned_response = self._clean_response(response_obj)
             
-            output_serializer = ResponseSerializer(data)
-            response_data = output_serializer.data
-            
-            # Format response based on request type
-            if format_type == 'thinking':
-                return Response({
-                    "query": query_data.get("query", ""),
-                    "format": "thinking",
-                    "thinking_process": response_data.get('thinking_process', {}),
-                    "response_summary": self._create_thinking_summary(response_data),
-                    "final_response": response_data.get('response', '')
-                }, status=status.HTTP_200_OK)
-            else:
-                # Default to streaming format
-                return Response({
-                    "query": query_data.get("query", ""),
-                    "format": "streaming",
-                    "streaming_data": response_data.get('streaming_format', {}),
-                    "live_steps": self._create_live_steps(response_data),
-                    "final_response": response_data.get('response', '')
-                }, status=status.HTTP_200_OK)
+            return Response(cleaned_response, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "format": "error_streaming"
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def _run_streaming_agent(self, query_data):
-        """Run agent optimized for streaming response."""
+    async def _run_agent(self, query_data):
+        """Run agent with simple response."""
         try:
             return await ExpenseMCPClient.create_and_run_query(query_data)
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "message": f"Streaming processing error: {str(e)}"
-            }
+            return {"error": str(e)}
 
-    def _create_thinking_summary(self, response_data):
-        """Create a thinking summary for the thinking format."""
-        return {
-            "overall_assessment": "Successfully processed expense recording request",
-            "confidence_level": "High",
-            "processing_approach": "Table-based expense tracking",
-            "user_experience": "Smooth and efficient",
-            "next_suggestions": [
-                "View your expense summary",
-                "Set budget limits",
-                "Generate expense reports"
-            ]
+    def _clean_response(self, response_obj):
+        """Clean the response by removing step prefixes and extracting tool information."""
+        import re
+        
+        # Initialize the cleaned response structure
+        cleaned_response = {
+            "response": "",
+            "tools_called": []
         }
-
-    def _create_live_steps(self, response_data):
-        """Create live steps simulation for streaming format."""
-        # Get query to determine the type of steps
-        query = response_data.get('query', '')
-        success = response_data.get('enhanced_data', {}).get('success', True)
         
-        # Determine if this is an expense recording
-        is_expense = any(word in query.lower() for word in ['khoroch', 'expense', 'cost'])
-        
-        if is_expense:
-            # Expense recording live steps
-            base_steps = [
-                {"timestamp": "00:00", "action": "🤔 Analyzing query...", "status": "completed"},
-                {"timestamp": "00:01", "action": "🧠 Understanding intent...", "status": "completed"},
-                {"timestamp": "00:02", "action": "🔍 Checking user tables...", "status": "completed"},
-                {"timestamp": "00:03", "action": "📝 Adding expense entry...", "status": "completed"},
-                {"timestamp": "00:04", "action": "✅ Generating response...", "status": "completed"}
-            ]
+        # Extract the main response text
+        if isinstance(response_obj, dict):
+            if 'response' in response_obj:
+                response_text = str(response_obj['response'])
+            elif 'message' in response_obj:
+                response_text = str(response_obj['message'])
+            else:
+                response_text = str(response_obj)
+            
+            # Extract tools information if available
+            if 'raw_response' in response_obj:
+                cleaned_response['tools_called'] = self._extract_tools_from_raw_response(response_obj['raw_response'])
         else:
-            # General financial operation live steps
-            base_steps = [
-                {"timestamp": "00:00", "action": "🤔 Analyzing query...", "status": "completed"},
-                {"timestamp": "00:01", "action": "🧠 Understanding intent...", "status": "completed"},
-                {"timestamp": "00:02", "action": "🔧 Processing request...", "status": "completed"},
-                {"timestamp": "00:03", "action": "✅ Generating response...", "status": "completed"}
-            ]
+            response_text = str(response_obj)
         
-        # If operation failed, mark the last step as failed
-        if not success and base_steps:
-            base_steps[-1]["status"] = "failed"
-            base_steps[-1]["action"] = "❌ Processing failed..."
+        # Remove step prefixes (Step 1:, Step 2:, etc.) from the beginning
+        response_text = re.sub(r'^Step \d+:\s*[^\n]*\n?', '', response_text, flags=re.MULTILINE)
         
-        # Add actual streaming data if available
-        streaming_format = response_data.get('streaming_format')
-        if streaming_format and 'steps' in streaming_format:
-            return streaming_format['steps']
+        # Also remove any remaining step patterns that might be at the start
+        response_text = re.sub(r'^Step \d+.*?\n', '', response_text)
         
-        return base_steps
+        # Clean up extra whitespace and newlines
+        response_text = response_text.strip()
+        
+        cleaned_response['response'] = response_text
+        
+        return cleaned_response
+    
+    def _extract_tools_from_raw_response(self, raw_response):
+        """Extract tool information from raw response."""
+        tools_called = []
+        
+        try:
+            if isinstance(raw_response, dict) and 'messages' in raw_response:
+                messages = raw_response['messages']
+                
+                for message in messages:
+                    if isinstance(message, list) and len(message) > 9:
+                        # Check if this is an AI message with tool calls
+                        if len(message) > 5 and message[5][1] == "ai":
+                            # Look for tool calls in the message
+                            if len(message) > 9 and message[9][0] == "tool_calls":
+                                tool_calls = message[9][1]
+                                
+                                for tool_call in tool_calls:
+                                    if isinstance(tool_call, dict) and 'name' in tool_call:
+                                        tool_info = {
+                                            'name': tool_call['name'],
+                                            'args': tool_call.get('args', {})
+                                        }
+                                        tools_called.append(tool_info)
+        except Exception:
+            # If we can't extract tools, just return empty list
+            pass
+        
+        return tools_called
