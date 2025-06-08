@@ -59,13 +59,13 @@ const Navbar = () => {
             </button>
 
             <a
-              href="#cta"
+              href="/Chat/"
               className={clsx(
                 "px-6 py-2 rounded-md transition-colors font-medium",
                 "bg-blue-600 text-white hover:bg-blue-700"
               )}
             >
-              Get Started
+              MY EXPENSES
             </a>
           </div>
 
@@ -104,7 +104,9 @@ const Navbar = () => {
         <div
           className={clsx(
             "md:hidden px-4 pb-4 space-y-2 transition-all duration-300",
-            theme === "dark" ? "bg-gray-900 text-gray-300" : "bg-white text-gray-700"
+            theme === "dark"
+              ? "bg-gray-900 text-gray-300"
+              : "bg-white text-gray-700"
           )}
         >
           <a href="#features" className="block py-2 border-b border-gray-200">
@@ -114,13 +116,13 @@ const Navbar = () => {
             Why Us
           </a>
           <a
-            href="#cta"
+            href="/Chat/"
             className={clsx(
               "block w-full text-center px-4 py-2 rounded-md font-medium mt-2",
               "bg-blue-600 text-white hover:bg-blue-700"
             )}
           >
-            Get Started
+            MY EXPENSES
           </a>
         </div>
       )}
