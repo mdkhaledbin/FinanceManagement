@@ -1,8 +1,9 @@
 // src/api/tableApi.ts
-import { getTableData, TableDataType } from "@/data/table";
-import { TableDataAction } from "@/reducers/TableReducer";
+import { tokenUtils } from "./AuthApi";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
+).replace(/\/$/, ""); // Remove trailing slash to avoid double slashes
 
 interface ApiResponse<T> {
   success: boolean;
@@ -10,100 +11,67 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-interface AddTableDataType {
+interface TableDataType {
   id: number;
   table_name: string;
   description: string;
 }
 
-const tableDataList = getTableData("1");
-
-// Helper for mock API responses
-function mockApiResponse<T>(
-  endpoint: string,
-  method: string,
-  body?: unknown
-): ApiResponse<T> {
-  // GET /tables - Return all tables
-  if (endpoint === "/tables" && method === "GET") {
-    return { success: true, data: tableDataList as unknown as T };
-  }
-
-  // POST /tables - Add new table
-  if (endpoint === "/tables" && method === "POST") {
-    const newTable: TableDataType = {
-      id: Math.max(0, ...tableDataList.map((t) => t.id)) + 1,
-      ...(body as Omit<TableDataType, "id">),
-    };
-    tableDataList.push(newTable);
-    return { success: true, data: newTable as unknown as T };
-  }
-
-  // PATCH /tables/:id - Edit table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "PATCH") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const table = tableDataList.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
-
-    Object.assign(table, body);
-    return { success: true, data: table as unknown as T };
-  }
-
-  // DELETE /tables/:id - Delete table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "DELETE") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const index = tableDataList.findIndex((t) => t.id === tableId);
-    if (index === -1) return { success: false, error: "Table not found" };
-
-    tableDataList.splice(index, 1);
-    return { success: true, data: { success: true } as unknown as T };
-  }
-
-  // POST /tables/:id/share - Share table
-  if (endpoint.match(/\/tables\/\d+\/share$/) && method === "POST") {
-    // Placeholder logic for sharing (just returning success for now)
-    return { success: true, data: { success: true } as unknown as T };
-  }
-
-  return {
-    success: false,
-    error: `Mock not implemented for ${method} ${endpoint}`,
-  };
+interface AddTableDataType {
+  table_name: string;
+  description: string;
 }
 
-// API request helper (with mock option)
+interface UpdateTableRequest {
+  id: number;
+  table_name: string;
+}
+
+// API request helper with JWT authentication
 const apiRequest = async <T>(
   endpoint: string,
   method: string,
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
-  const USE_MOCK_RESPONSES = true;
-
-  if (USE_MOCK_RESPONSES) {
-    return mockApiResponse<T>(endpoint, method, body);
-  }
-
   try {
+    // Get JWT token for authentication
+    const token = tokenUtils.getToken();
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
       headers: {
         "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
+      credentials: "include", // Include cookies for JWT
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       return {
         success: false,
-        error: errorData.message || `HTTP error! status: ${response.status}`,
+        error:
+          errorData.message ||
+          errorData.error ||
+          `HTTP error! status: ${response.status}`,
       };
     }
 
     const data = await response.json();
+
+    // Handle different response formats from backend
+    if (data.success !== undefined) {
+      return { success: data.success, data: data.data, error: data.error };
+    }
+
+    // Handle Django response format: { message: "...", data: [...] }
+    if (data.message && data.data !== undefined) {
+      return { success: true, data: data.data };
+    }
+
     return { success: true, data };
   } catch (error) {
     return {
@@ -116,103 +84,157 @@ const apiRequest = async <T>(
 
 // Table API Service
 export const tableApi = {
-  // Get all tables
+  // Get all tables - JWT authenticated
   async getTables(): Promise<ApiResponse<TableDataType[]>> {
-    return apiRequest<TableDataType[]>("/tables", "GET");
+    return apiRequest<TableDataType[]>("/main/tables/", "GET");
   },
 
-  // Add a new table
+  // Add a new table - JWT authenticated
   async addTable(
-    tableData: Omit<AddTableDataType, "id">
+    tableData: AddTableDataType
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>("/tables", "POST", tableData);
+    return apiRequest<TableDataType>("/main/tables/", "POST", tableData);
   },
 
-  // Edit a table
-  async editTable(
-    id: number,
-    updateData: { table_name: string }
+  // Update a table - JWT authenticated
+  async updateTable(
+    updateData: UpdateTableRequest
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>(`/tables/${id}`, "PATCH", updateData);
+    return apiRequest<TableDataType>(
+      "/main/upadate-table/",
+      "POST",
+      updateData
+    );
   },
 
-  // Delete a table
+  // Delete a table - JWT authenticated (Demo - may not be working on backend)
   async deleteTable(id: number): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(`/tables/${id}`, "DELETE");
+    return apiRequest<{ success: boolean }>(`/main/tables/${id}/`, "DELETE");
   },
 
-  // Share a table
+  // Share a table - JWT authenticated
   async shareTable(
-    id: number
-    // shareData: { userIds: string[]; permission: string }
+    id: number,
+    shareData?: { userIds: string[]; permission: string }
   ): Promise<ApiResponse<{ success: boolean }>> {
     return apiRequest<{ success: boolean }>(
-      `/tables/${id}/share`,
-      "POST"
-      // shareData
+      `/main/tables/${id}/share/`,
+      "POST",
+      shareData
     );
   },
 };
 
+// Updated action types to match new API
+export type TableDataAction =
+  | { type: "GET_TABLES" }
+  | { type: "ADD_TABLE"; payload: AddTableDataType }
+  | { type: "UPDATE_TABLE"; payload: UpdateTableRequest }
+  | { type: "DELETE_TABLE"; payload: { id: number } }
+  | {
+      type: "SHARE_TABLE";
+      payload: { id: number; userIds?: string[]; permission?: string };
+    };
+
 // Utility function to handle API calls and dispatch actions
 export const handleTableOperation = async (
   action: TableDataAction,
-  dispatch: React.Dispatch<TableDataAction>
+  dispatch: React.Dispatch<any>, // You can type this better based on your reducer
+  onSuccess?: (data?: any) => void,
+  onError?: (error: string) => void
 ) => {
   try {
     switch (action.type) {
+      case "GET_TABLES": {
+        const response = await tableApi.getTables();
+
+        if (response.success && response.data) {
+          dispatch({
+            type: "SET_TABLES",
+            payload: response.data,
+          });
+          onSuccess?.(response.data);
+        } else {
+          throw new Error(response.error || "Failed to fetch tables");
+        }
+        break;
+      }
+
       case "ADD_TABLE": {
-        const { id, ...tableData } = action.payload;
         const response = await tableApi.addTable(action.payload);
 
-        if (response.error) throw new Error(response.error);
-
-        dispatch({
-          type: "ADD_TABLE",
-          payload: {
-            id: response.data?.id || id,
-            table_name: response.data?.table_name || tableData.table_name,
-            description: response.data?.description || tableData.description,
-          },
-        });
+        if (response.success && response.data) {
+          dispatch({
+            type: "ADD_TABLE",
+            payload: response.data,
+          });
+          onSuccess?.(response.data);
+        } else {
+          throw new Error(response.error || "Failed to add table");
+        }
         break;
       }
 
-      case "EDIT": {
-        const response = await tableApi.editTable(action.payload.id, {
-          table_name: action.payload.table_name,
-        });
+      case "UPDATE_TABLE": {
+        const response = await tableApi.updateTable(action.payload);
 
-        if (response.error) throw new Error(response.error);
-
-        dispatch(action);
+        if (response.success && response.data) {
+          dispatch({
+            type: "UPDATE_TABLE",
+            payload: response.data,
+          });
+          onSuccess?.(response.data);
+        } else {
+          throw new Error(response.error || "Failed to update table");
+        }
         break;
       }
 
-      case "DELETE": {
+      case "DELETE_TABLE": {
         const response = await tableApi.deleteTable(action.payload.id);
 
-        if (response.error) throw new Error(response.error);
-
-        dispatch(action);
+        if (response.success) {
+          dispatch({
+            type: "DELETE_TABLE",
+            payload: action.payload,
+          });
+          onSuccess?.();
+        } else {
+          throw new Error(response.error || "Failed to delete table");
+        }
         break;
       }
 
-      case "SHARE": {
-        const response = await tableApi.shareTable(action.payload.id);
+      case "SHARE_TABLE": {
+        const { id, userIds, permission } = action.payload;
+        const shareData =
+          userIds && permission ? { userIds, permission } : undefined;
+        const response = await tableApi.shareTable(id, shareData);
 
-        if (response.error) throw new Error(response.error);
-
-        console.log("Table shared successfully!");
-        // Optional: dispatch an action to update state
+        if (response.success) {
+          console.log("Table shared successfully!");
+          onSuccess?.();
+        } else {
+          throw new Error(response.error || "Failed to share table");
+        }
         break;
       }
 
       default:
-        break;
+        throw new Error("Unknown action type");
     }
   } catch (error) {
-    console.error("Table operation failed:", error);
-    // Consider dispatching an error action
+    const errorMessage =
+      error instanceof Error ? error.message : "Operation failed";
+    console.error("Table operation failed:", errorMessage);
+    onError?.(errorMessage);
   }
+};
+
+// Export types
+export type {
+  TableDataType,
+  AddTableDataType,
+  UpdateTableRequest,
+  ApiResponse,
 };

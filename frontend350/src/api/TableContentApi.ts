@@ -89,7 +89,7 @@ function mockApiResponse<T>(
         table.data.headers
           .filter((header) => !(header in rowData))
           .map((header) => [header, ""])
-      )
+      ),
     };
 
     // Create a new copy of the table with the updated rows
@@ -97,15 +97,15 @@ function mockApiResponse<T>(
       ...table,
       data: {
         ...table.data,
-        rows: [...table.data.rows, newRow]
-      }
+        rows: [...table.data.rows, newRow],
+      },
     };
 
     // Update the table in the array
     jsonTableData = [
       ...jsonTableData.slice(0, tableIndex),
       updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
+      ...jsonTableData.slice(tableIndex + 1),
     ];
 
     return { success: true, data: newRow as unknown as T };
@@ -126,7 +126,7 @@ function mockApiResponse<T>(
     // Create a new copy of the row with updates
     const updatedRow = {
       ...table.data.rows[rowIndex],
-      ...(body as Partial<TableRow>)
+      ...(body as Partial<TableRow>),
     };
 
     // Create a new copy of the table with the updated row
@@ -137,16 +137,16 @@ function mockApiResponse<T>(
         rows: [
           ...table.data.rows.slice(0, rowIndex),
           updatedRow,
-          ...table.data.rows.slice(rowIndex + 1)
-        ]
-      }
+          ...table.data.rows.slice(rowIndex + 1),
+        ],
+      },
     };
 
     // Update the table in the array
     jsonTableData = [
       ...jsonTableData.slice(0, tableIndex),
       updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
+      ...jsonTableData.slice(tableIndex + 1),
     ];
 
     return { success: true, data: updatedRow as unknown as T };
@@ -162,26 +162,28 @@ function mockApiResponse<T>(
 
     const table = jsonTableData[tableIndex];
     const initialLength = table.data.rows.length;
-    
+
     // Create a new copy of the table with the row removed
     const updatedTable = {
       ...table,
       data: {
         ...table.data,
-        rows: table.data.rows.filter((row) => row.id !== rowId)
-      }
+        rows: table.data.rows.filter((row) => row.id !== rowId),
+      },
     };
 
     // Update the table in the array
     jsonTableData = [
       ...jsonTableData.slice(0, tableIndex),
       updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
+      ...jsonTableData.slice(tableIndex + 1),
     ];
 
-    return { 
+    return {
       success: initialLength !== updatedTable.data.rows.length,
-      data: { success: initialLength !== updatedTable.data.rows.length } as unknown as T 
+      data: {
+        success: initialLength !== updatedTable.data.rows.length,
+      } as unknown as T,
     };
   }
 
@@ -197,10 +199,15 @@ function mockApiResponse<T>(
     // Update rows to maintain column consistency
     const updatedRows = table.data.rows.map((row) => {
       const newRow: TableRow = { id: row.id };
-      headers.forEach(header => {
+      headers.forEach((header) => {
         // Ensure no undefined values are assigned and cast to correct type
-        const value = Object.prototype.hasOwnProperty.call(row, header) ? row[header] : "";
-        newRow[header] = value !== undefined ? value as string | number | boolean | null : "";
+        const value = Object.prototype.hasOwnProperty.call(row, header)
+          ? row[header]
+          : "";
+        newRow[header] =
+          value !== undefined
+            ? (value as string | number | boolean | null)
+            : "";
       });
       return newRow;
     });
@@ -210,15 +217,15 @@ function mockApiResponse<T>(
       ...table,
       data: {
         headers,
-        rows: updatedRows
-      }
+        rows: updatedRows,
+      },
     };
 
     // Update the table in the array
     jsonTableData = [
       ...jsonTableData.slice(0, tableIndex),
       updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
+      ...jsonTableData.slice(tableIndex + 1),
     ];
 
     return { success: true, data: updatedTable.data as unknown as T };
@@ -232,7 +239,7 @@ function mockApiResponse<T>(
 
     const table = jsonTableData[tableIndex];
     const { header } = body as { header: string };
-    
+
     if (table.data.headers.includes(header)) {
       return { success: false, error: "Column already exists" };
     }
@@ -241,9 +248,9 @@ function mockApiResponse<T>(
     const newHeaders = [...table.data.headers, header];
 
     // Update rows with the new column
-    const updatedRows = table.data.rows.map(row => ({
+    const updatedRows = table.data.rows.map((row) => ({
       ...row,
-      [header]: ""
+      [header]: "",
     }));
 
     // Create a new copy of the table with updated headers and rows
@@ -251,15 +258,15 @@ function mockApiResponse<T>(
       ...table,
       data: {
         headers: newHeaders,
-        rows: updatedRows
-      }
+        rows: updatedRows,
+      },
     };
 
     // Update the table in the array
     jsonTableData = [
       ...jsonTableData.slice(0, tableIndex),
       updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
+      ...jsonTableData.slice(tableIndex + 1),
     ];
 
     return { success: true, data: updatedTable.data as unknown as T };
@@ -278,7 +285,7 @@ const apiRequest = async <T>(
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
-  const USE_MOCK_RESPONSES = true;
+  const USE_MOCK_RESPONSES = false;
 
   if (USE_MOCK_RESPONSES) {
     return mockApiResponse<T>(endpoint, method, body);
@@ -308,7 +315,8 @@ const apiRequest = async <T>(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "An unknown error occurred",
+      error:
+        error instanceof Error ? error.message : "An unknown error occurred",
     };
   }
 };
@@ -396,7 +404,7 @@ export const handleJsonTableOperation = async (
     switch (action.type) {
       case "ADD_TABLE": {
         const { id, data } = action.payload;
-        const response = await jsonTableApi.addTable(String(id), { data});
+        const response = await jsonTableApi.addTable(String(id), { data });
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add table");

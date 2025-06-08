@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,36 +13,124 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { SunIcon, MoonIcon } from "lucide-react";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { SunIcon, MoonIcon, AlertCircle } from "lucide-react";
 import { ThemeProvider, useTheme } from "@/context/ThemeProvider";
+import { AuthProvider, useAuth } from "@/context/AuthProvider";
+import { authApi } from "@/api/AuthApi";
 import clsx from "clsx";
 import { DataProvider } from "@/context/DataProvider";
 import { SelectedTableProvider } from "@/context/SelectedTableProvider";
 
 const SignInForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-  const { theme, toggleTheme } = useTheme();
+  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    password2: "",
+    rememberMe: false,
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    console.log("Form submitted", { isSignUp, theme });
-    setTimeout(() => setLoading(false), 2000);
+  const { theme, toggleTheme } = useTheme();
+  const { signIn, signUp, loading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/Chat");
+    }
+  }, [isAuthenticated, router]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+    // Clear error when user starts typing
+    if (error) setError("");
   };
 
-  const handlePasswordReset = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setResetEmailSent(true);
-    setTimeout(() => {
-      setShowForgotPassword(false);
-      setResetEmailSent(false);
-      setResetEmail("");
-    }, 2500);
+    setError("");
+
+    try {
+      if (isSignUp) {
+        // Sign Up
+        if (!formData.username.trim()) {
+          setError("Username is required");
+          return;
+        }
+
+        if (formData.password !== formData.password2) {
+          setError("Passwords do not match");
+          return;
+        }
+
+        const result = await signUp(
+          formData.username,
+          formData.email,
+          formData.password,
+          formData.password2
+        );
+
+        if (result.success) {
+          router.push("/Chat");
+        } else {
+          setError(result.error || "Sign up failed");
+        }
+      } else {
+        // Sign In
+        const result = await signIn(formData.username, formData.password);
+
+        if (result.success) {
+          router.push("/Chat");
+        } else {
+          setError(result.error || "Sign in failed");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Form submission error:", error);
+      setError("An unexpected error occurred during form submission");
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+
+    if (!resetEmail.trim()) {
+      setError("Email is required");
+      return;
+    }
+
+    try {
+      const response = await authApi.resetPassword(resetEmail);
+
+      if (response.success) {
+        setResetEmailSent(true);
+        setTimeout(() => {
+          setShowForgotPassword(false);
+          setResetEmailSent(false);
+          setResetEmail("");
+        }, 3000);
+      } else {
+        setError(response.error || "Password reset failed");
+      }
+    } catch (error) {
+      setError("An unexpected error occurred");
+    }
   };
 
   return (
@@ -119,17 +208,35 @@ const SignInForm = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="text-sm max-w-sm">
-                • Smart budget tracking<br />
-                • Conversational chatbot for finance help<br />
-                • Real-time analytics & personalized insights<br />
-                • Cross-device sync & AI reminders<br />
-                • Military-grade data protection
+                • Smart budget tracking
+                <br />
+                • Conversational chatbot for finance help
+                <br />
+                • Real-time analytics & personalized insights
+                <br />
+                • Cross-device sync & AI reminders
+                <br />• Military-grade data protection
               </PopoverContent>
             </Popover>
           )}
         </CardHeader>
 
         <CardContent className="space-y-6 p-6 sm:p-8">
+          {/* Error Message */}
+          {error && (
+            <div
+              className={clsx(
+                "flex items-center gap-2 p-3 rounded-lg",
+                theme === "dark"
+                  ? "bg-red-900/20 border-red-800 text-red-300"
+                  : "bg-red-50 border-red-200 text-red-700"
+              )}
+            >
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
           {showForgotPassword ? (
             <form onSubmit={handlePasswordReset} className="space-y-5">
               <div>
@@ -156,6 +263,7 @@ const SignInForm = () => {
               </div>
               <Button
                 type="submit"
+                disabled={loading}
                 className={clsx(
                   "w-full font-semibold py-3 rounded-lg",
                   theme === "dark"
@@ -163,7 +271,11 @@ const SignInForm = () => {
                     : "bg-blue-600 hover:bg-blue-700 text-white"
                 )}
               >
-                {resetEmailSent ? "Email Sent!" : "Send Reset Link"}
+                {resetEmailSent
+                  ? "Email Sent!"
+                  : loading
+                  ? "Sending..."
+                  : "Send Reset Link"}
               </Button>
               <p
                 className={clsx(
@@ -173,7 +285,10 @@ const SignInForm = () => {
               >
                 <button
                   type="button"
-                  onClick={() => setShowForgotPassword(false)}
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setError("");
+                  }}
                   className={clsx(
                     "font-semibold hover:underline",
                     theme === "dark" ? "text-blue-400" : "text-blue-600"
@@ -185,19 +300,49 @@ const SignInForm = () => {
             </form>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Username field - always show */}
+              <div>
+                <Label
+                  htmlFor="username"
+                  className={clsx(
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  Username
+                </Label>
+                <Input
+                  id="username"
+                  name="username"
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  className={clsx(
+                    theme === "dark"
+                      ? "bg-gray-700 border-gray-600 text-white"
+                      : ""
+                  )}
+                />
+              </div>
+
+              {/* Email field - only for signup */}
               {isSignUp && (
                 <div>
                   <Label
-                    htmlFor="name"
+                    htmlFor="email"
                     className={clsx(
                       theme === "dark" ? "text-gray-300" : "text-gray-700"
                     )}
                   >
-                    Full Name
+                    Email
                   </Label>
                   <Input
-                    id="name"
+                    id="email"
+                    name="email"
+                    type="email"
                     required
+                    value={formData.email}
+                    onChange={handleInputChange}
                     className={clsx(
                       theme === "dark"
                         ? "bg-gray-700 border-gray-600 text-white"
@@ -206,26 +351,8 @@ const SignInForm = () => {
                   />
                 </div>
               )}
-              <div>
-                <Label
-                  htmlFor="email"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
-                >
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
-                />
-              </div>
+
+              {/* Password field */}
               <div>
                 <Label
                   htmlFor="password"
@@ -237,8 +364,11 @@ const SignInForm = () => {
                 </Label>
                 <Input
                   id="password"
+                  name="password"
                   type="password"
                   required
+                  value={formData.password}
+                  onChange={handleInputChange}
                   className={clsx(
                     theme === "dark"
                       ? "bg-gray-700 border-gray-600 text-white"
@@ -247,10 +377,47 @@ const SignInForm = () => {
                 />
               </div>
 
+              {/* Confirm password - only for signup */}
+              {isSignUp && (
+                <div>
+                  <Label
+                    htmlFor="password2"
+                    className={clsx(
+                      theme === "dark" ? "text-gray-300" : "text-gray-700"
+                    )}
+                  >
+                    Confirm Password
+                  </Label>
+                  <Input
+                    id="password2"
+                    name="password2"
+                    type="password"
+                    required
+                    value={formData.password2}
+                    onChange={handleInputChange}
+                    className={clsx(
+                      theme === "dark"
+                        ? "bg-gray-700 border-gray-600 text-white"
+                        : ""
+                    )}
+                  />
+                </div>
+              )}
+
               {!isSignUp && (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Checkbox id="remember" />
+                    <Checkbox
+                      id="remember"
+                      name="rememberMe"
+                      checked={formData.rememberMe}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          rememberMe: !!checked,
+                        }))
+                      }
+                    />
                     <Label
                       htmlFor="remember"
                       className={clsx(
@@ -263,7 +430,10 @@ const SignInForm = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowForgotPassword(true)}
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setError("");
+                    }}
                     className={clsx(
                       "text-sm hover:underline",
                       theme === "dark" ? "text-blue-400" : "text-blue-600"
@@ -296,11 +466,20 @@ const SignInForm = () => {
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               )}
             >
-              {isSignUp
-                ? "Already have an account?"
-                : "Don't have an account?"}{" "}
+              {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
               <button
-                onClick={() => setIsSignUp(!isSignUp)}
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError("");
+                  setFormData({
+                    username: "",
+                    email: "",
+                    password: "",
+                    password2: "",
+                    rememberMe: false,
+                  });
+                }}
                 className={clsx(
                   "font-semibold hover:underline",
                   theme === "dark" ? "text-blue-400" : "text-blue-600"
@@ -310,6 +489,24 @@ const SignInForm = () => {
               </button>
             </p>
           )}
+
+          {/* Demo Credentials Info */}
+          {!showForgotPassword && (
+            <div
+              className={clsx(
+                "mt-4 p-3 rounded-lg text-xs",
+                theme === "dark"
+                  ? "bg-gray-700/50 text-gray-400"
+                  : "bg-gray-50 text-gray-600"
+              )}
+            >
+              <strong>Demo Credentials:</strong>
+              <br />
+              Username: khaled
+              <br />
+              Password: Khaledd@55
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -318,11 +515,13 @@ const SignInForm = () => {
 
 const SignInPage = () => (
   <ThemeProvider>
-    <DataProvider>
-      <SelectedTableProvider>
-        <SignInForm />
-      </SelectedTableProvider>
-    </DataProvider>
+    <AuthProvider>
+      <DataProvider>
+        <SelectedTableProvider>
+          <SignInForm />
+        </SelectedTableProvider>
+      </DataProvider>
+    </AuthProvider>
   </ThemeProvider>
 );
 
