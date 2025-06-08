@@ -129,9 +129,9 @@ export const jsonTableApi = {
     tableId: number,
     headers: string[]
   ): Promise<ApiResponse<TableData>> {
-    return apiRequest<TableData>(`/main/update-headers/`, "PUT", {
+    return apiRequest<TableData>(`/main/delete-column/`, "POST", {
       table_id: tableId,
-      headers,
+      headers: headers,
     });
   },
 
