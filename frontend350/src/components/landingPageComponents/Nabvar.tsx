@@ -1,7 +1,11 @@
+'use client';
+
 import React, { useState } from "react";
 import { useTheme } from "@/context/ThemeProvider";
-import { FiMenu, FiX, FiSun, FiMoon } from "react-icons/fi";
+import { FiMenu, FiX, FiSun, FiMoon, FiSettings } from "react-icons/fi";
 import clsx from "clsx";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
+import UserSettings from "@/components/ui/userSetting";
 
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
@@ -37,16 +41,12 @@ const Navbar = () => {
             FinBot
           </div>
 
-          {/* Desktop Links */}
+          {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-6">
-            <a href="#features" className={linkStyle}>
-              Features
-            </a>
-            <a href="#why-us" className={linkStyle}>
-              Why Us
-            </a>
+            <a href="#features" className={linkStyle}>Features</a>
+            <a href="#why-us" className={linkStyle}>Why Us</a>
 
-            {/* Theme Toggle Button */}
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className={clsx(
@@ -57,6 +57,25 @@ const Navbar = () => {
             >
               {theme === "dark" ? <FiSun size={20} /> : <FiMoon size={20} />}
             </button>
+
+            {/* Settings Dialog */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  className={clsx(
+                    "p-2 rounded-full transition-colors",
+                    theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-blue-600"
+                  )}
+                  aria-label="User Settings"
+                >
+                  <FiSettings size={20} />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogTitle className="sr-only">User Settings</DialogTitle>
+                <UserSettings />
+              </DialogContent>
+            </Dialog>
 
             <a
               href="/Chat/"
@@ -71,7 +90,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Toggle */}
           <div className="md:hidden flex items-center space-x-3">
-            {/* Mobile Theme Toggle */}
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className={clsx(
@@ -82,6 +101,25 @@ const Navbar = () => {
             >
               {theme === "dark" ? <FiSun size={20} /> : <FiMoon size={20} />}
             </button>
+
+            {/* Settings Dialog (Mobile) */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  className={clsx(
+                    "p-2 rounded-full transition-colors",
+                    theme === "dark" ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-blue-600"
+                  )}
+                  aria-label="User Settings"
+                >
+                  <FiSettings size={20} />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogTitle className="sr-only">User Settings</DialogTitle>
+                <UserSettings />
+              </DialogContent>
+            </Dialog>
 
             <button
               onClick={toggleMobileMenu}
@@ -109,12 +147,8 @@ const Navbar = () => {
               : "bg-white text-gray-700"
           )}
         >
-          <a href="#features" className="block py-2 border-b border-gray-200">
-            Features
-          </a>
-          <a href="#why-us" className="block py-2 border-b border-gray-200">
-            Why Us
-          </a>
+          <a href="#features" className="block py-2 border-b border-gray-200">Features</a>
+          <a href="#why-us" className="block py-2 border-b border-gray-200">Why Us</a>
           <a
             href="/Chat/"
             className={clsx(
