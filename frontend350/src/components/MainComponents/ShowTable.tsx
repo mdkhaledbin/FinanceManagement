@@ -108,7 +108,6 @@ const ShowTable = () => {
   } | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const tableRef = useRef<HTMLTableElement>(null);
-  
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -300,32 +299,56 @@ const ShowTable = () => {
   };
 
   const handleAddRow = async () => {
-    const newRow: TableRow = {
-      id: Math.max(...rows.map((r) => Number(r.id)), 0) + 1,
-    };
-    headers.forEach((header) => {
-      if (header !== "id") {
-        newRow[header] = "";
-      }
-    });
+    console.log("🔄 Adding new row...");
 
-    await handleJsonTableOperation(
-      {
-        type: "ADD_ROW",
-        payload: {
-          tableId: TableContent[0].id,
-          row: newRow,
-        },
-      },
-      dispatchtablesContent
-    );
-    setTimeout(() => {
-      setEditingCell({
-        rowIndex: rows.length,
-        header: headers[1],
+    // Ensure we have table content
+    if (TableContent.length === 0) {
+      console.error("❌ No table content available");
+      return;
+    }
+
+    try {
+      // Create new row with auto-incremented ID
+      const newRowId = Math.max(...rows.map((r) => Number(r.id)), 0) + 1;
+      const newRow: TableRow = {
+        id: newRowId,
+      };
+
+      // Add empty fields for all headers except 'id'
+      headers.forEach((header) => {
+        if (header !== "id") {
+          newRow[header] = ""; // Set all fields to empty string
+        }
       });
-      setEditValue("");
-    }, 0);
+
+      console.log("📝 New row to add:", newRow);
+      console.log("🎯 Target table ID:", TableContent[0].id);
+
+      // Make API call to add row
+      await handleJsonTableOperation(
+        {
+          type: "ADD_ROW",
+          payload: {
+            tableId: TableContent[0].id,
+            row: newRow,
+          },
+        },
+        dispatchtablesContent
+      );
+
+      // Auto-focus the first editable cell after adding
+      setTimeout(() => {
+        setEditingCell({
+          rowIndex: rows.length, // This will be the new row's index
+          header: headers[1], // First non-ID column
+        });
+        setEditValue("");
+      }, 100);
+
+      console.log("✅ Row added successfully!");
+    } catch (error) {
+      console.error("❌ Failed to add row:", error);
+    }
   };
   const handleDuplicateRow = async (rowId: number | string) => {
     // console.log("Duplicating row with id:", rowId); // Debug log

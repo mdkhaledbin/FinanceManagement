@@ -93,18 +93,21 @@ export const tableApi = {
   async addTable(
     tableData: AddTableDataType
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>("/main/tables/", "POST", tableData);
+    return apiRequest<TableDataType>(
+      "/main/create-tableContent/",
+      "POST",
+      tableData
+    );
   },
 
   // Update a table - JWT authenticated
   async updateTable(
     updateData: UpdateTableRequest
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>(
-      "/main/upadate-table/",
-      "POST",
-      updateData
-    );
+    return apiRequest<TableDataType>("/main/upadate-table/", "PUT", {
+      id: updateData.id,
+      table_name: updateData.table_name,
+    });
   },
 
   // Delete a table - JWT authenticated (Demo - may not be working on backend)
@@ -134,7 +137,12 @@ export type TableDataAction =
   | {
       type: "SHARE_TABLE";
       payload: { id: number; userIds?: string[]; permission?: string };
-    };
+    }
+  // Add SET_TABLES for proper state management
+  | { type: "SET_TABLES"; payload: TableDataType[] }
+  | { type: "EDIT"; payload: { id: number; table_name: string } }
+  | { type: "DELETE"; payload: { id: number } }
+  | { type: "SHARE"; payload: { id: number } };
 
 // Utility function to handle API calls and dispatch actions
 export const handleTableOperation = async (
@@ -175,13 +183,19 @@ export const handleTableOperation = async (
         break;
       }
 
-      case "UPDATE_TABLE": {
-        const response = await tableApi.updateTable(action.payload);
+      case "UPDATE_TABLE":
+      case "EDIT": {
+        const payload =
+          action.type === "EDIT"
+            ? { id: action.payload.id, table_name: action.payload.table_name }
+            : action.payload;
+
+        const response = await tableApi.updateTable(payload);
 
         if (response.success && response.data) {
           dispatch({
-            type: "UPDATE_TABLE",
-            payload: response.data,
+            type: "EDIT",
+            payload: { id: payload.id, table_name: payload.table_name },
           });
           onSuccess?.(response.data);
         } else {
@@ -190,13 +204,16 @@ export const handleTableOperation = async (
         break;
       }
 
-      case "DELETE_TABLE": {
-        const response = await tableApi.deleteTable(action.payload.id);
+      case "DELETE_TABLE":
+      case "DELETE": {
+        const tableId =
+          action.type === "DELETE" ? action.payload.id : action.payload.id;
+        const response = await tableApi.deleteTable(tableId);
 
         if (response.success) {
           dispatch({
-            type: "DELETE_TABLE",
-            payload: action.payload,
+            type: "DELETE",
+            payload: { id: tableId },
           });
           onSuccess?.();
         } else {
@@ -205,14 +222,24 @@ export const handleTableOperation = async (
         break;
       }
 
-      case "SHARE_TABLE": {
-        const { id, userIds, permission } = action.payload;
+      case "SHARE_TABLE":
+      case "SHARE": {
+        const tableId =
+          action.type === "SHARE" ? action.payload.id : action.payload.id;
+        const { userIds, permission } =
+          action.type === "SHARE_TABLE"
+            ? action.payload
+            : { userIds: undefined, permission: undefined };
         const shareData =
           userIds && permission ? { userIds, permission } : undefined;
-        const response = await tableApi.shareTable(id, shareData);
+        const response = await tableApi.shareTable(tableId, shareData);
 
         if (response.success) {
           console.log("Table shared successfully!");
+          dispatch({
+            type: "SHARE",
+            payload: { id: tableId },
+          });
           onSuccess?.();
         } else {
           throw new Error(response.error || "Failed to share table");

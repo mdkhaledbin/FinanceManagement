@@ -1,4 +1,7 @@
-import { handleJsonTableOperation } from "@/api/TableContentApi";
+import {
+  handleJsonTableOperation,
+  AddTableWithContentRequest,
+} from "@/api/TableContentApi";
 import { handleTableOperation } from "@/api/TableDataApi";
 import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
 import { useTheme } from "@/context/ThemeProvider";
@@ -16,7 +19,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const { theme } = useTheme();
   const [tableName, setTableName] = useState("");
   const [description, setDescription] = useState("");
-  const [headers, setHeaders] = useState("");
+  const [headers, setHeaders] = useState("user_id, action, timestamp");
   const [error, setError] = useState("");
   const { dispatchTablesData } = useTablesData();
   const { dispatchtablesContent } = useTablesContent();
@@ -29,61 +32,60 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
       return;
     }
 
-    // Generate a simple ID (in a real app, this would come from the backend)
-    const newId = Math.floor(Math.random() * 10000) + 1;
+    try {
+      // Parse headers from input
+      const headersArray = headers
+        .split(",")
+        .map((h) => h.trim())
+        .filter((h) => h);
+      const defaultHeaders = ["id", ...headersArray];
 
-    const headersArray = headers
-      .split(",")
-      .map((h) => h.trim())
-      .filter((h) => h);
-    const defaultHeaders = ["id", ...headersArray];
+      // Create the table content request in the format you specified
+      const tableContentRequest: AddTableWithContentRequest = {
+        table_name: tableName,
+        description: description || "This is a new table.",
+        data: {
+          headers: defaultHeaders,
+        },
+      };
 
-    const newTableContent: JsonTableItem = {
-      id: newId,
-      data: {
-        headers: defaultHeaders,
-        rows: [],
-      },
-    };
-    await handleTableOperation(
-      {
-        type: "ADD_TABLE",
-        payload: { id: newId, table_name: tableName, description: description },
-      },
-      dispatchTablesData
-    );
-    await handleJsonTableOperation(
-      {
-        type: "ADD_TABLE",
-        payload: {
-          id: newId,
-          data: {
-            headers: defaultHeaders,
-            rows: [],
+      // First create the table metadata
+      await handleTableOperation(
+        {
+          type: "ADD_TABLE",
+          payload: {
+            table_name: tableName,
+            description: description || "This is a new table.",
           },
         },
-      },
-      dispatchtablesContent
-    );
-    // dispatchtablesContent({
-    //   type: "ADD_TABLE",
-    //   payload: {
-    //     id: newId,
-    //     data: {
-    //       headers: defaultHeaders,
-    //       rows: [],
-    //     },
-    //   },
-    // });
+        dispatchTablesData
+      );
 
-    // dispatchTablesData({
-    //   type: "ADD_TABLE",
-    //   payload: { id: newId, table_name: tableName, description: description },
-    // });
+      // Then create the table content structure using the jsonTableApi directly
+      const { jsonTableApi } = await import("@/api/TableContentApi");
+      const response = await jsonTableApi.addTable(tableContentRequest);
 
-    // // onCreateTable(newTable, newTableContent);
-    console.log(`Table to create: ${newTableContent}`);
-    onCloseModal();
+      if (response.success && response.data) {
+        // Dispatch the content creation action
+        dispatchtablesContent({
+          type: "ADD_TABLE",
+          payload: {
+            id: response.data.id,
+            data: response.data.data,
+          },
+        });
+
+        console.log("Table created successfully:", response.data);
+        onCloseModal();
+      } else {
+        throw new Error(response.error || "Failed to create table content");
+      }
+    } catch (error) {
+      console.error("Error creating table:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to create table"
+      );
+    }
   };
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
