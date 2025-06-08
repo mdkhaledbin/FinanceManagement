@@ -1,23 +1,47 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/context/ThemeProvider";
+import { useAuth } from "@/context/AuthProvider";
+import { useSelectedTable } from "@/context/SelectedTableProvider";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css"; // Modern, clean dark theme
 import { ChatMessage } from "@/data/ChatMessages";
 
+interface AgentResponse {
+  response: string;
+  tools_called: Array<{
+    name: string;
+    args: Record<string, any>;
+  }>;
+  streaming_info?: {
+    tool_operations: Array<{
+      step: number;
+      tool_name: string;
+      tool_type: string;
+      operation: string;
+      status: string;
+      timestamp: string;
+    }>;
+    status: string;
+  };
+}
 
 const ChatArea = () => {
   const { theme } = useTheme();
+  const { isAuthenticated } = useAuth();
+  const { selectedTable } = useSelectedTable();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "1",
-      text: "Hello! How can I help you today?",
+      text: "Hello! I'm your AI finance assistant. I can help you manage your expenses, create tables, and track your financial data. How can I assist you today?",
       sender: "bot",
       timestamp: new Date(),
-      displayedText: "Hello! How can I help you today?",
+      displayedText:
+        "Hello! I'm your AI finance assistant. I can help you manage your expenses, create tables, and track your financial data. How can I assist you today?",
     },
   ]);
   const [inputValue, setInputValue] = useState("");
   const [inputRows, setInputRows] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -106,14 +130,13 @@ const ChatArea = () => {
 
   const startTypingEffect = (messageId: string, fullText: string) => {
     let currentIndex = 0;
-    const baseSpeed = 20; // Base speed in ms per character
-    const minSpeed = 10; // Minimum speed in ms
-    const maxSpeed = 40; // Maximum speed in ms
+    const baseSpeed = 15; // Faster typing for real responses
+    const minSpeed = 8;
+    const maxSpeed = 25;
 
-    // Calculate speed based on message length (longer messages type faster)
     const speed = Math.max(
       minSpeed,
-      Math.min(maxSpeed, baseSpeed - fullText.length / 10)
+      Math.min(maxSpeed, baseSpeed - fullText.length / 20)
     );
 
     // Clear any existing interval
@@ -149,10 +172,56 @@ const ChatArea = () => {
     }, speed);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const sendToAgent = async (query: string): Promise<AgentResponse> => {
+    try {
+      const requestBody: any = {
+        query: query,
+      };
+
+      // Add table context if a table is selected
+      if (selectedTable) {
+        requestBody.table_id = selectedTable;
+        requestBody.context_type = "table_context";
+      }
+
+      const response = await fetch("http://127.0.0.1:8000/agent/streaming/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Include cookies for authentication
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: AgentResponse = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error calling agent:", error);
+      throw error;
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (inputValue.trim() === "") return;
+    if (inputValue.trim() === "" || isLoading) return;
+
+    // Check authentication
+    if (!isAuthenticated) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: "Please log in to use the chat feature.",
+        sender: "bot",
+        timestamp: new Date(),
+        displayedText: "Please log in to use the chat feature.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -164,58 +233,63 @@ const ChatArea = () => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentQuery = inputValue;
     setInputValue("");
     setInputRows(1);
+    setIsLoading(true);
 
-    // Add temporary bot message with typing indicator
-    const botResponses = [
-      "I understand what you're saying.",
-      "That's an interesting point!",
-      "Let me think about that...",
-      "Thanks for sharing that with me.",
-      "Can you tell me more about that?",
-      "I'm here to help with any questions you have.",
-      `Here's the data you requested along with some additional information:
-
-\`\`\`json
-{
-  "user": {
-    "id": "usr_12345",
-    "name": "John Doe",
-    "email": "john@example.com",
-    "preferences": {
-      "theme": "dark",
-      "notifications": true,
-      "language": "en-US"
-    }
-  },
-  "status": "active",
-  "last_login": "2023-11-15T08:30:45Z",
-  "account_type": "premium"
-}
-\`\`\`
-
-Let me know if you'd like me to explain any part of this data or if you need it in a different format.`,
-      "Lorem ipsum dolor sit amet consectetur, adipisicing elit. Odit eum animi temporibus ad sunt asperiores, iste accusamus, magni quo suscipit fuga modi, ipsa dolores doloremque ullam error. Porro, reprehenderit voluptate. Lorem ipsum dolor, sit amet consectetur adipisicing elit. Modi ullam nemo, quidem illum, asperiores explicabo esse velit fugit, quaerat repellat ratione tempora! Odio, neque? Accusamus exercitationem beatae temporibus quas sed. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Deleniti ea, labore assumenda magnam distinctio voluptas hic, dolore ipsum recusandae sunt a animi ut quod maiores nisi ducimus saepe facere exercitationem? Lorem ipsum dolor sit amet, consectetur adipisicing elit. Ipsum tempora perferendis quia praesentium aperiam expedita voluptatem odio magnam enim hic, facere similique quis cum ut maxime quod laboriosam consequuntur vitae. Lorem ipsum dolor sit, amet consectetur adipisicing elit. Ducimus quidem earum ipsam perspiciatis excepturi velit possimus voluptate blanditiis porro eum sint, atque consequuntur cum iure tenetur nostrum repellendus? Amet, inventore. Lorem, ipsum dolor sit amet consectetur adipisicing elit. Beatae iste magni iure labore quasi atque veritatis, repellat unde odio consectetur, ducimus hic quae nobis. Quis rem distinctio a quae modi!",
-    ];
-
-    const botMessageText =
-      botResponses[Math.floor(Math.random() * botResponses.length)];
-    const botMessage: ChatMessage = {
+    // Add loading bot message
+    const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
-      text: botMessageText,
+      text: "🤔 Thinking...",
       sender: "bot",
       timestamp: new Date(),
       isTyping: true,
-      displayedText: "",
+      displayedText: "🤔 Thinking...",
     };
 
-    setMessages((prev) => [...prev, botMessage]);
+    setMessages((prev) => [...prev, loadingMessage]);
 
-    // Start typing effect after a short delay
-    setTimeout(() => {
-      startTypingEffect(botMessage.id, botMessageText);
-    }, 500);
+    try {
+      // Call the agent streaming endpoint
+      const agentResponse = await sendToAgent(currentQuery);
+
+      // Remove loading message and add actual response
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
+
+      const botMessage: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        text: agentResponse.response,
+        sender: "bot",
+        timestamp: new Date(),
+        isTyping: true,
+        displayedText: "",
+        agentData: agentResponse, // Store the full agent response
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+
+      // Start typing effect
+      setTimeout(() => {
+        startTypingEffect(botMessage.id, agentResponse.response);
+      }, 300);
+    } catch (error) {
+      // Remove loading message and show error
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
+
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 3).toString(),
+        text: "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
+        sender: "bot",
+        timestamp: new Date(),
+        displayedText:
+          "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -235,13 +309,35 @@ Let me know if you'd like me to explain any part of this data or if you need it 
             theme === "dark" ? "border-gray-700" : "border-gray-200"
           }`}
         >
-          <h2
-            className={`text-lg font-semibold ${
-              theme === "dark" ? "text-white" : "text-gray-800"
-            }`}
-          >
-            Chat
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2
+              className={`text-lg font-semibold ${
+                theme === "dark" ? "text-white" : "text-gray-800"
+              }`}
+            >
+              AI Finance Assistant
+            </h2>
+            {selectedTable && (
+              <div
+                className={`text-xs px-2 py-1 rounded-full ${
+                  theme === "dark"
+                    ? "bg-blue-600 text-blue-100"
+                    : "bg-blue-100 text-blue-800"
+                }`}
+              >
+                Context: Table {selectedTable}
+              </div>
+            )}
+          </div>
+          {!isAuthenticated && (
+            <div
+              className={`text-xs mt-2 ${
+                theme === "dark" ? "text-yellow-400" : "text-yellow-600"
+              }`}
+            >
+              Please log in to use chat features
+            </div>
+          )}
         </div>
 
         {/* Chat messages area */}
@@ -271,6 +367,35 @@ Let me know if you'd like me to explain any part of this data or if you need it 
                       <span className="ml-1 inline-block h-2 w-2 rounded-full bg-gray-400 animate-pulse"></span>
                     )}
                   </div>
+
+                  {/* Show tool information if available */}
+                  {message.agentData?.tools_called &&
+                    message.agentData.tools_called.length > 0 &&
+                    !message.isTyping && (
+                      <div
+                        className={`text-xs mt-2 p-2 rounded border-l-2 ${
+                          theme === "dark"
+                            ? "bg-gray-600 border-blue-400 text-gray-300"
+                            : "bg-gray-100 border-blue-500 text-gray-600"
+                        }`}
+                      >
+                        <div className="font-medium mb-1">Tools Used:</div>
+                        {message.agentData.tools_called.map(
+                          (
+                            tool: { name: string; args: Record<string, any> },
+                            index: number
+                          ) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1"
+                            >
+                              <span className="w-1 h-1 bg-current rounded-full"></span>
+                              <span>{tool.name}</span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
 
                   <div
                     className={`text-xs mt-1 text-right ${
@@ -308,7 +433,12 @@ Let me know if you'd like me to explain any part of this data or if you need it 
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={
+                isAuthenticated
+                  ? "Ask me about your finances, expenses, or table data..."
+                  : "Please log in to chat..."
+              }
+              disabled={!isAuthenticated || isLoading}
               rows={inputRows}
               className={`flex-1 p-3 rounded-lg resize-none ${
                 theme === "dark"
@@ -318,20 +448,29 @@ Let me know if you'd like me to explain any part of this data or if you need it 
                 theme === "dark" ? "border-gray-600" : "border-gray-300"
               } focus:outline-none focus:ring-2 ${
                 theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
-              } overflow-y-auto max-h-32`}
+              } overflow-y-auto max-h-32 ${
+                !isAuthenticated || isLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
               style={{ minHeight: "44px" }}
             />
             <button
               type="submit"
+              disabled={
+                !isAuthenticated || isLoading || inputValue.trim() === ""
+              }
               className={`px-4 py-2 rounded-lg font-medium h-fit ${
                 theme === "dark"
                   ? "bg-blue-600 hover:bg-blue-700 text-white"
                   : "bg-blue-500 hover:bg-blue-600 text-white"
               } focus:outline-none focus:ring-2 ${
                 theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
+              } disabled:opacity-50 disabled:cursor-not-allowed ${
+                isLoading ? "animate-pulse" : ""
               }`}
             >
-              Send
+              {isLoading ? "..." : "Send"}
             </button>
           </form>
         </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import ChatArea from "./chat/ChatArea"; //use ChatAreaReal after integration of Api
+import ChatArea from "./chat/ChatArea"; // Now integrated with agent streaming API
 import ShowTable from "./MainComponents/ShowTable";
 import { useTheme } from "@/context/ThemeProvider";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
