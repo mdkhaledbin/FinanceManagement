@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useState } from 'react';
 import { useTheme } from '@/context/ThemeProvider';
 import clsx from 'clsx';
@@ -6,6 +7,7 @@ import clsx from 'clsx';
 const settingsOptions = [
   { label: 'Enable Notifications', key: 'notifications' },
   { label: 'Auto-Save Transactions', key: 'autoSave' },
+  { label: 'Monthly Report Summary', key: 'monthlyReport' },
   { label: 'Dark Mode', key: 'darkMode', controlledByTheme: true },
 ];
 
@@ -14,6 +16,7 @@ const UserSettings = () => {
   const [settings, setSettings] = useState({
     notifications: true,
     autoSave: false,
+    monthlyReport: true,
   });
 
   const handleToggle = (key: string) => {
