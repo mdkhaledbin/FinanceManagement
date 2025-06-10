@@ -34,7 +34,7 @@ const UserSettings = () => {
         'bg-gray-900 text-white'
       )}
     >
-      {/* Close button inside the card */}
+      {}
       <DialogClose className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
         <XIcon className="h-5 w-5" />
         <span className="sr-only">Close</span>
