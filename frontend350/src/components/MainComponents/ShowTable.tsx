@@ -438,24 +438,22 @@ const ShowTable = () => {
   const handleDeleteColumn = async (header: string) => {
     if (headers.length <= 1) return; // Don't delete the last column
 
-    const newHeaders = headers.filter((h) => h !== header);
-
     await handleJsonTableOperation(
       {
-        type: "EDIT_TABLE_HEADERS",
+        type: "DELETE_COLUMN",
         payload: {
           tableId: TableContent[0].id,
-          headers: newHeaders,
+          header: header,
         },
       },
       dispatchtablesContent
     );
 
     // dispatchtablesContent({
-    //   type: "EDIT_TABLE_HEADERS",
+    //   type: "DELETE_COLUMN",
     //   payload: {
     //     tableId: TableContent[0].id,
-    //     headers: newHeaders,
+    //     header: header,
     //   },
     // });
   };

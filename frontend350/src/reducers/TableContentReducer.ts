@@ -16,6 +16,7 @@ export type JsonTableAction =
       type: "EDIT_TABLE_HEADERS";
       payload: { tableId: number; headers: string[] };
     }
+  | { type: "DELETE_COLUMN"; payload: { tableId: number; header: string } }
   | { type: "DELETE_TABLE"; payload: { tableId: number } }
   | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } }
   | { type: "SET_TABLES"; payload: JsonTableItem[] };
@@ -129,6 +130,26 @@ export function jsonTableReducer(
             data: {
               ...table.data,
               headers,
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "DELETE_COLUMN": {
+      const { tableId, header } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers: table.data.headers.filter((h) => h !== header),
+              rows: table.data.rows.map((row) => {
+                const { [header]: deletedField, ...newRow } = row;
+                return newRow;
+              }),
             },
           };
         }

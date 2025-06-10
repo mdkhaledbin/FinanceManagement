@@ -124,14 +124,14 @@ export const jsonTableApi = {
     });
   },
 
-  // Update table headers
-  async updateHeaders(
+  // Delete a single column from a table
+  async deleteColumn(
     tableId: number,
-    headers: string[]
+    header: string
   ): Promise<ApiResponse<TableData>> {
     return apiRequest<TableData>(`/main/delete-column/`, "POST", {
-      table_id: tableId,
-      headers: headers,
+      tableId: tableId,
+      header: header,
     });
   },
 
@@ -226,10 +226,15 @@ export const handleJsonTableOperation = async (
 
       case "EDIT_TABLE_HEADERS": {
         const { tableId, headers } = action.payload;
-        const response = await jsonTableApi.updateHeaders(tableId, headers);
+        // For single column deletion, we'll use the first header in the array
+        const headerToDelete = headers[0];
+        const response = await jsonTableApi.deleteColumn(
+          tableId,
+          headerToDelete
+        );
 
         if (!response.success || response.error) {
-          throw new Error(response.error || "Failed to update headers");
+          throw new Error(response.error || "Failed to delete column");
         }
 
         dispatch(action);
@@ -254,6 +259,18 @@ export const handleJsonTableOperation = async (
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add column");
+        }
+
+        dispatch(action);
+        break;
+      }
+
+      case "DELETE_COLUMN": {
+        const { tableId, header } = action.payload;
+        const response = await jsonTableApi.deleteColumn(tableId, header);
+
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to delete column");
         }
 
         dispatch(action);
