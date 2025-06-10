@@ -12,6 +12,7 @@ import os
 import json
 import uuid
 from typing import Optional
+import time
 
 # Django setup - MUST be done before any Django imports
 sys.path.insert(0, '/home/mehedi/03_Projects/FinanceManagement/expense_backend')
@@ -35,6 +36,8 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from expense_api.apps.FinanceManagement.models import DynamicTableData, JsonTable, JsonTableRow
 from expense_api.apps.FinanceManagement.serializers import DynamicTableSerializer
+from expense_api.apps.agent.models import ChatSession, ChatMessage
+from expense_api.apps.agent.serializers import ChatSessionSerializer, ChatMessageSerializer
 
 # MCP server
 mcp = FastMCP("finance_management")
@@ -530,6 +533,506 @@ async def delete_table(user_id: int, table_id: int) -> str:
         return json.dumps({"success": False, "error": "User not found"})
     except DynamicTableData.DoesNotExist:
         return json.dumps({"success": False, "error": "Table not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 11: Delete a single column from a table
+@mcp.tool()
+async def delete_single_column(table_id: int, header: str) -> str:
+    """
+    Delete a single column from a table.
+    
+    Parameters:
+    - table_id: ID of the table
+    - header: Name of the column header to delete
+    
+    Returns:
+    - JSON string with success status
+    """
+    try:
+        json_table = await sync_to_async(JsonTable.objects.get)(pk=table_id)
+        
+        if header not in json_table.headers:
+            return json.dumps({"success": False, "error": f"Header '{header}' does not exist in the table"})
+        
+        @sync_to_async
+        def delete_column():
+            # Remove the header from the headers list
+            json_table.headers.remove(header)
+            json_table.save()
+            
+            # Remove the header key from all rows
+            for row in json_table.rows.all():
+                if header in row.data:
+                    del row.data[header]
+                    row.save()
+            
+            return json_table.headers
+        
+        updated_headers = await delete_column()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Column '{header}' deleted successfully",
+            "headers": updated_headers
+        })
+        
+    except JsonTable.DoesNotExist:
+        return json.dumps({"success": False, "error": "Table not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ============ CHAT SESSION MANAGEMENT TOOLS ============
+
+# ✅ Tool 12: Create a new chat session
+@mcp.tool()
+async def create_chat_session(user_id: int, title: str = "New Chat") -> str:
+    """
+    Create a new chat session for a user.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - title: Title for the chat session
+    
+    Returns:
+    - JSON string with session data
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def create_session():
+            session_id = f"chat_{user_id}_{int(time.time())}"
+            session = ChatSession.objects.create(
+                user=user,
+                session_id=session_id,
+                title=title
+            )
+            return ChatSessionSerializer(session).data
+        
+        session_data = await create_session()
+        
+        return json.dumps({
+            "success": True,
+            "message": "Chat session created successfully",
+            "data": session_data
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 13: Get all chat sessions for a user
+@mcp.tool()
+async def get_chat_sessions(user_id: int) -> str:
+    """
+    Get all active chat sessions for a user.
+    
+    Parameters:
+    - user_id: User ID to fetch sessions for
+    
+    Returns:
+    - JSON string with sessions data
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def get_sessions():
+            sessions = ChatSession.objects.filter(user=user, is_active=True)
+            return ChatSessionSerializer(sessions, many=True).data
+        
+        sessions_data = await get_sessions()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Found {len(sessions_data)} chat sessions",
+            "data": sessions_data
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 14: Get chat session details
+@mcp.tool()
+async def get_chat_session(user_id: int, session_id: str) -> str:
+    """
+    Get specific chat session details.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - session_id: Session ID to retrieve
+    
+    Returns:
+    - JSON string with session data
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def get_session():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            return ChatSessionSerializer(session).data
+        
+        session_data = await get_session()
+        
+        return json.dumps({
+            "success": True,
+            "message": "Chat session retrieved successfully",
+            "data": session_data
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 15: Update chat session
+@mcp.tool()
+async def update_chat_session(user_id: int, session_id: str, title: Optional[str] = None, is_active: Optional[bool] = None) -> str:
+    """
+    Update chat session details.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - session_id: Session ID to update
+    - title: New title for the session (optional)
+    - is_active: Active status (optional)
+    
+    Returns:
+    - JSON string with updated session data
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def update_session():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            updated = False
+            
+            if title is not None:
+                session.title = title
+                updated = True
+            if is_active is not None:
+                session.is_active = is_active
+                updated = True
+            
+            if updated:
+                session.save()
+                return ChatSessionSerializer(session).data, True
+            return None, False
+        
+        session_data, was_updated = await update_session()
+        
+        if was_updated:
+            return json.dumps({
+                "success": True,
+                "message": "Chat session updated successfully",
+                "data": session_data
+            })
+        else:
+            return json.dumps({"success": False, "error": "No fields to update"})
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 16: Delete chat session
+@mcp.tool()
+async def delete_chat_session(user_id: int, session_id: str) -> str:
+    """
+    Delete (soft delete) a chat session.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - session_id: Session ID to delete
+    
+    Returns:
+    - JSON string with success status
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def delete_session():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            session.is_active = False
+            session.save()
+            return session.title
+        
+        session_title = await delete_session()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Chat session '{session_title}' deleted successfully"
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ============ CHAT MESSAGE MANAGEMENT TOOLS ============
+
+# ✅ Tool 17: Save chat message
+@mcp.tool()
+async def save_chat_message(user_id: int, session_id: str, message_id: str, text: str, sender: str, 
+                           is_typing: bool = False, displayed_text: Optional[str] = None, 
+                           agent_data: Optional[str] = None) -> str:
+    """
+    Save a chat message to a session.
+    
+    Parameters:
+    - user_id: User ID who owns the message
+    - session_id: Session ID to save message to
+    - message_id: Unique message ID
+    - text: Message text content
+    - sender: Message sender ('user' or 'bot')
+    - is_typing: Whether this is a typing indicator (optional)
+    - displayed_text: Text to display (optional, defaults to text)
+    - agent_data: Additional agent data as JSON string (optional)
+    
+    Returns:
+    - JSON string with message data
+    """
+    try:
+        if sender not in ['user', 'bot']:
+            return json.dumps({"success": False, "error": "Sender must be 'user' or 'bot'"})
+        
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def save_message():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            
+            # Parse agent_data if provided
+            parsed_agent_data = None
+            if agent_data:
+                try:
+                    parsed_agent_data = json.loads(agent_data)
+                except json.JSONDecodeError:
+                    parsed_agent_data = {"raw": agent_data}
+            
+            message = ChatMessage.objects.create(
+                chat_session=session,
+                user=user,
+                message_id=message_id,
+                text=text,
+                sender=sender,
+                is_typing=is_typing,
+                displayed_text=displayed_text or text,
+                agent_data=parsed_agent_data
+            )
+            
+            # Update session timestamp
+            session.save()
+            
+            return ChatMessageSerializer(message).data
+        
+        message_data = await save_message()
+        
+        return json.dumps({
+            "success": True,
+            "message": "Chat message saved successfully",
+            "data": message_data
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 18: Get chat messages
+@mcp.tool()
+async def get_chat_messages(user_id: int, session_id: str, limit: Optional[int] = 100) -> str:
+    """
+    Get chat messages from a session.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - session_id: Session ID to get messages from
+    - limit: Maximum number of messages to return (optional, default 100)
+    
+    Returns:
+    - JSON string with messages data
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def get_messages():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            messages = ChatMessage.objects.filter(chat_session=session).order_by('timestamp')
+            
+            if limit:
+                messages = messages[:limit]
+            
+            return {
+                "session_info": {
+                    "session_id": session.session_id,
+                    "title": session.title
+                },
+                "messages": ChatMessageSerializer(messages, many=True).data
+            }
+        
+        result = await get_messages()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Retrieved {len(result['messages'])} messages",
+            "data": result
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 19: Clear chat messages
+@mcp.tool()
+async def clear_chat_messages(user_id: int, session_id: str) -> str:
+    """
+    Clear all messages from a chat session.
+    
+    Parameters:
+    - user_id: User ID who owns the session
+    - session_id: Session ID to clear messages from
+    
+    Returns:
+    - JSON string with success status
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def clear_messages():
+            session = ChatSession.objects.get(session_id=session_id, user=user)
+            deleted_count = ChatMessage.objects.filter(chat_session=session).delete()[0]
+            return deleted_count
+        
+        deleted_count = await clear_messages()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Cleared {deleted_count} messages from chat session"
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except ChatSession.DoesNotExist:
+        return json.dumps({"success": False, "error": "Chat session not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 20: Search tables by name or description
+@mcp.tool()
+async def search_tables(user_id: int, query: str) -> str:
+    """
+    Search user's tables by name or description.
+    
+    Parameters:
+    - user_id: User ID to search tables for
+    - query: Search query string
+    
+    Returns:
+    - JSON string with matching tables
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def search():
+            from django.db.models import Q
+            tables = DynamicTableData.objects.filter(
+                user=user
+            ).filter(
+                Q(table_name__icontains=query) | Q(description__icontains=query)
+            )
+            return DynamicTableSerializer(tables, many=True).data
+        
+        results = await search()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Found {len(results)} matching tables",
+            "data": results
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)})
+
+# ✅ Tool 21: Get table statistics
+@mcp.tool()
+async def get_table_statistics(user_id: int, table_id: Optional[int] = None) -> str:
+    """
+    Get statistics for user's tables.
+    
+    Parameters:
+    - user_id: User ID to get statistics for
+    - table_id: Optional specific table ID (if None, returns all tables stats)
+    
+    Returns:
+    - JSON string with statistics
+    """
+    try:
+        user = await sync_to_async(User.objects.get)(id=user_id)
+        
+        @sync_to_async
+        def get_stats():
+            if table_id:
+                tables = DynamicTableData.objects.filter(id=table_id, user=user)
+            else:
+                tables = DynamicTableData.objects.filter(user=user)
+            
+            stats = []
+            for table in tables:
+                try:
+                    json_table = JsonTable.objects.get(table=table)
+                    row_count = json_table.rows.count()
+                    column_count = len(json_table.headers)
+                except JsonTable.DoesNotExist:
+                    row_count = 0
+                    column_count = 0
+                
+                stats.append({
+                    "table_id": table.id,
+                    "table_name": table.table_name,
+                    "description": table.description,
+                    "row_count": row_count,
+                    "column_count": column_count,
+                    "pending_count": table.pending_count,
+                    "created_at": table.created_at.isoformat(),
+                    "modified_at": table.modified_at.isoformat()
+                })
+            
+            return stats
+        
+        stats = await get_stats()
+        
+        return json.dumps({
+            "success": True,
+            "message": f"Statistics for {len(stats)} tables",
+            "data": stats
+        })
+        
+    except User.DoesNotExist:
+        return json.dumps({"success": False, "error": "User not found"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
 
