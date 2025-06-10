@@ -390,4 +390,59 @@ class UpdateTableView(APIView):
                 {'error': str(e)},
                 status=400
             )
+
+
+class DeleteTableView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def delete(self, request, table_id):
+        """Delete a table and all its associated data"""
+        try:
+            # Get user from token
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+            user = User.objects.get(id=user_id)
+
+            if not user.is_authenticated:
+                return Response({
+                    "message": "Authentication credentials were not provided or are invalid."
+                }, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Get the table and verify ownership
+            try:
+                table_data = DynamicTableData.objects.get(id=table_id, user=user)
+            except DynamicTableData.DoesNotExist:
+                return Response({
+                    "error": "Table not found or you don't have permission to delete it."
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Get the associated JsonTable if it exists
+            try:
+                json_table = JsonTable.objects.get(table=table_data)
+                # Delete all rows first (cascade should handle this, but being explicit)
+                json_table.rows.all().delete()
+                # Delete the JsonTable
+                json_table.delete()
+            except JsonTable.DoesNotExist:
+                # Table exists in DynamicTableData but not in JsonTable, that's okay
+                pass
+
+            # Store table name for response
+            table_name = table_data.table_name
+            
+            # Delete the main table record
+            table_data.delete()
+
+            return Response({
+                "message": f"Table '{table_name}' and all its data deleted successfully."
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": f"Failed to delete table: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 

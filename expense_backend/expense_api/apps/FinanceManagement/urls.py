@@ -8,12 +8,14 @@ from .views import (
     CreateTableWithHeadersView, 
     AddRowView, 
     DynamicTableUpdateView, 
-    GetTableContentView
+    GetTableContentView,
+    DeleteTableView
 )
 
 urlpatterns = [
     # ============ TABLE MANAGEMENT URLS ONLY ============
     path('tables/', DynamicTableListView.as_view(), name='dynamic-table-list'),
+    path('tables/<int:table_id>/', DeleteTableView.as_view(), name='delete-table'),
     path('tables/update/', DynamicTableUpdateView.as_view(), name='dynamic-table-update'),
     path('table-contents/', GetTableContentView.as_view(), name='get-table-content'),
     path('create-tableContent/', CreateTableWithHeadersView.as_view(), name='create-table-content'),

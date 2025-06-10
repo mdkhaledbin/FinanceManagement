@@ -110,9 +110,9 @@ export const tableApi = {
     });
   },
 
-  // Delete a table - JWT authenticated (Demo - may not be working on backend)
-  async deleteTable(id: number): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(`/main/tables/${id}/`, "DELETE");
+  // Delete a table - JWT authenticated
+  async deleteTable(id: number): Promise<ApiResponse<{ message: string }>> {
+    return apiRequest<{ message: string }>(`/main/tables/${id}/`, "DELETE");
   },
 
   // Share a table - JWT authenticated
@@ -215,7 +215,7 @@ export const handleTableOperation = async (
             type: "DELETE",
             payload: { id: tableId },
           });
-          onSuccess?.();
+          onSuccess?.(response.data?.message || "Table deleted successfully");
         } else {
           throw new Error(response.error || "Failed to delete table");
         }
