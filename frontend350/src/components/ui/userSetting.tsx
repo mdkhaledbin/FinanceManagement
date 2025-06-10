@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { useTheme } from '@/context/ThemeProvider';
 import clsx from 'clsx';
+import { DialogClose } from '@/components/ui/dialog';
+import { XIcon } from 'lucide-react';
 
 const settingsOptions = [
   { label: 'Enable Notifications', key: 'notifications' },
   { label: 'Auto-Save Transactions', key: 'autoSave' },
   { label: 'Monthly Report Summary', key: 'monthlyReport' },
-  { label: 'Dark Mode', key: 'darkMode', controlledByTheme: true },
 ];
 
 const UserSettings = () => {
@@ -20,29 +21,29 @@ const UserSettings = () => {
   });
 
   const handleToggle = (key: string) => {
-    if (key === 'darkMode') {
-      toggleTheme();
-    } else {
-      setSettings((prev) => ({
-        ...prev,
-        [key]: !prev[key as keyof typeof settings],
-      }));
-    }
+    setSettings((prev) => ({
+      ...prev,
+      [key]: !prev[key as keyof typeof settings],
+    }));
   };
 
   return (
     <div
       className={clsx(
-        'w-full max-w-md mx-auto rounded-xl p-6 shadow-lg transition-colors duration-300',
-        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+        'w-full max-w-md mx-auto rounded-xl p-6 shadow-lg transition-colors duration-300 relative',
+        'bg-gray-900 text-white'
       )}
     >
+      {/* Close button inside the card */}
+      <DialogClose className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+        <XIcon className="h-5 w-5" />
+        <span className="sr-only">Close</span>
+      </DialogClose>
+      
       <h2 className="text-2xl font-bold mb-4">User Settings</h2>
       <ul className="space-y-4">
         {settingsOptions.map((option) => {
-          const isEnabled = option.controlledByTheme
-            ? theme === 'dark'
-            : settings[option.key as keyof typeof settings];
+          const isEnabled = settings[option.key as keyof typeof settings];
           return (
             <li key={option.key} className="flex justify-between items-center">
               <span>{option.label}</span>
