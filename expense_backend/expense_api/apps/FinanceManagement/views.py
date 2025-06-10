@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.http import JsonResponse
+import time
 
 from ..user_auth.authentication import IsAuthenticatedCustom, decode_refresh_token, generate_access_token, generate_refresh_token
 from ..user_auth.permission import JWTAuthentication
@@ -106,45 +107,6 @@ class DynamicTableUpdateView(APIView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-# class DynamicTableCreateView(APIView):
-#     authentication_classes = [JWTAuthentication]
-#     permission_classes = [IsAuthenticatedCustom]
-
-#     def post(self, request):
-#         try:
-#             refresh_token = request.COOKIES.get('refresh_token')
-#             if not refresh_token:
-#                 return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-            
-#             user_id = decode_refresh_token(refresh_token)
-#             user = User.objects.get(id=user_id)
-
-#             if not user.is_authenticated:
-#                 return Response({
-#                     "message": "Authentication credentials were not provided or are invalid."
-#                 }, status=status.HTTP_401_UNAUTHORIZED)
-
-#             data = request.data.copy()
-#             # data['user_id'] = user.id  # Associate user to the table
-
-#             serializer = DynamicTableSerializer(data=data)
-#             if serializer.is_valid():
-#                 serializer.save(user=user)
-#                 return Response({
-#                     "message": "Table created successfully.",
-#                     "data": serializer.data
-#                 }, status=status.HTTP_201_CREATED)
-#             else:
-#                 return Response({
-#                     "message": "Invalid data.",
-#                     "errors": serializer.errors
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-
-#         except Exception as e:
-#             return Response({
-#                 "message": "An unexpected error occurred while creating the table.",
-#                 "error": str(e)
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
             
 class GetTableContentView(APIView):
     def get(self, request): 
@@ -200,22 +162,20 @@ class AddRowView(APIView):
 
         except Exception as e:
             return Response({
-                "error": "Failed to add row.",
-                "details": str(e)
+                "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                       
-            
+
+
 class CreateTableWithHeadersView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
 
     def post(self, request):
         try:
-            # Extract token and user
             refresh_token = request.COOKIES.get('refresh_token')
             if not refresh_token:
                 return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-
+            
             user_id = decode_refresh_token(refresh_token)
             user = User.objects.get(id=user_id)
 
@@ -224,88 +184,86 @@ class CreateTableWithHeadersView(APIView):
                     "message": "Authentication credentials were not provided or are invalid."
                 }, status=status.HTTP_401_UNAUTHORIZED)
 
-            # Extract main fields
             table_name = request.data.get("table_name")
-            description = request.data.get("description")
-            data = request.data.get("data", {})
-            headers = data.get("headers")
+            headers = request.data.get("headers", [])
+            description = request.data.get("description", "")
 
-            # Validate required fields
-            if not table_name or not description:
+            if not table_name or not headers:
                 return Response({
-                    "message": "Both 'table_name' and 'description' are required."
+                    "error": "Table name and headers are required."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if not isinstance(headers, list) or not all(isinstance(h, str) for h in headers):
-                return Response({
-                    "message": "'headers' must be a list of strings inside 'data'."
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Step 1: Create table
-            dynamic_table = DynamicTableData.objects.create(
+            # Create the DynamicTableData instance
+            table_data = DynamicTableData.objects.create(
                 table_name=table_name,
-                description=description,
                 user=user,
-                pending_count=0
+                description=description
             )
-            
-            # Step 2: Add headers
-            JsonTable.objects.create(table=dynamic_table, headers=headers)
 
+            # Create the JsonTable instance
+            json_table = JsonTable.objects.create(
+                table=table_data,
+                headers=headers
+            )
+
+            # Return success response
             return Response({
-                "message": "Table and headers created successfully.",
-                "table_id": dynamic_table.id,
-                "table_name": dynamic_table.table_name,
-                "headers": headers
+                "message": "Table created successfully.",
+                "data": {
+                    "id": table_data.id,
+                    "table_name": table_data.table_name,
+                    "headers": json_table.headers,
+                    "created_at": table_data.created_at,
+                    "description": table_data.description
+                }
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({
-                "message": "Failed to create table with headers.",
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
+
 class AddColumnView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
     def post(self, request):
         try:
-            table_id = request.data.get("table_id")
-            header = request.data.get("header")
+            table_id = request.data.get("tableId")
+            new_header = request.data.get("header")
 
-            if not table_id or not isinstance(header, str):
+            if not table_id or not new_header:
                 return Response({
-                    "error": "'table_id' and a string 'header' are required."
+                    "error": "'tableId' and 'header' are required."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Fetch JsonTable
             json_table = get_object_or_404(JsonTable, pk=table_id)
 
-            # Prevent duplicate header
-            if header in json_table.headers:
+            # Check if header already exists
+            if new_header in json_table.headers:
                 return Response({
-                    "error": f"Header '{header}' already exists in table."
+                    "error": f"Header '{new_header}' already exists."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Add new header to the header list
-            json_table.headers.append(header)
+            # Add the new header
+            json_table.headers.append(new_header)
             json_table.save()
 
-            # Update all rows by adding new column with empty string
+            # Add empty values for existing rows
             for row in json_table.rows.all():
-                row.data[header] = ""
+                row.data[new_header] = ""
                 row.save()
 
             return Response({
-                "message": f"Header '{header}' added successfully.",
+                "message": "Column added successfully.",
                 "headers": json_table.headers
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
-                "error": "Failed to add new column.",
-                "details": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)     
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DeleteColumnView(APIView):
@@ -314,46 +272,43 @@ class DeleteColumnView(APIView):
     def post(self, request):
         try:
             table_id = request.data.get("tableId")
-            new_headers = request.data.get("headers")
+            header_to_delete = request.data.get("header")
 
-            if not table_id or not isinstance(new_headers, list) or not all(isinstance(h, str) for h in new_headers):
+            if not table_id or not isinstance(header_to_delete, str):
                 return Response({
-                    "error": "'table_id' and 'headers' (list of strings) are required."
+                    "error": "'tableId' and 'header' (string) are required."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Fetch JsonTable
             json_table = get_object_or_404(JsonTable, pk=table_id)
 
-            old_headers = json_table.headers
-            deleted_headers = set(old_headers) - set(new_headers)
-
-            if not deleted_headers:
+            # Check if header exists
+            if header_to_delete not in json_table.headers:
                 return Response({
-                    "message": "No headers were deleted.",
-                    "headers": old_headers
-                }, status=status.HTTP_200_OK)
+                    "error": f"Header '{header_to_delete}' does not exist in the table."
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Update headers in JsonTable
-            json_table.headers = new_headers
+            # Remove the header from the headers list
+            json_table.headers.remove(header_to_delete)
             json_table.save()
 
-            # Remove deleted header keys from all rows
+            # Remove the header key from all rows
             for row in json_table.rows.all():
-                for col in deleted_headers:
-                    row.data.pop(col, None)  # Remove the key if it exists
-                row.save()
+                if header_to_delete in row.data:
+                    del row.data[header_to_delete]
+                    row.save()
 
             return Response({
-                "message": f"Deleted columns: {list(deleted_headers)}",
-                "headers": new_headers
+                "message": f"Column '{header_to_delete}' deleted successfully.",
+                "headers": json_table.headers
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
-                "error": "Failed to delete column(s).",
-                "details": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
-            
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class DeleteRowView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
@@ -362,99 +317,68 @@ class DeleteRowView(APIView):
             table_id = request.data.get("tableId")
             row_id = request.data.get("rowId")
 
-            if not table_id or not row_id:
+            if not table_id or row_id is None:
                 return Response({
-                    "error": "'table_id' and 'row_id' are required."
+                    "error": "'tableId' and 'rowId' are required."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Custom error handling for JsonTable
+            # Fetch JsonTable
+            json_table = get_object_or_404(JsonTable, pk=table_id)
+
+            # Find and delete the row
             try:
-                json_table = JsonTable.objects.get(pk=table_id)
-            except JsonTable.DoesNotExist:
+                if isinstance(row_id, str):
+                    # Find row by data key 'id'
+                    row = json_table.rows.get(data__id=row_id)
+                else:
+                    # Find row by primary key
+                    row = json_table.rows.get(pk=row_id)
+                
+                row.delete()
+                
                 return Response({
-                    "error": f"Table with ID {table_id} does not exist."
-                }, status=status.HTTP_404_NOT_FOUND)
+                    "message": "Row deleted successfully."
+                }, status=status.HTTP_200_OK)
 
-            # Custom error handling for JsonTableRow
-            # try:
-            #     row = JsonTableRow.objects.get(id=row_id, table=json_table)
-            # except JsonTableRow.DoesNotExist:
-            #     return Response({
-            #         "error": f"Row with ID {row_id} does not exist in table {table_id}."
-            #     }, status=status.HTTP_404_NOT_FOUND)
-
-            # row.delete()
-            
-            # Find the row by data['id']
-            target_row = None
-            for row in json_table.rows.all():
-                if str(row.data.get("id")) == str(row_id):
-                    target_row = row
-                    break
-
-            if not target_row:
+            except JsonTableRow.DoesNotExist:
                 return Response({
-                    "error": f"No row with id '{row_id}' found in table {table_id}."
+                    "error": f"Row with ID '{row_id}' not found in table."
                 }, status=status.HTTP_404_NOT_FOUND)
-
-            target_row.delete()
-
-            return Response({
-                "message": f"Row with ID {row_id} successfully deleted from table {table_id}."
-            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
-                "error": "Failed to delete the row.",
-                "details": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)       
-            
-            
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class UpdateTableView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticatedCustom]
     def patch(self, request, *args, **kwargs):
         try:
-            # Parse request body
-            table_id = request.data.get('table_id')
-            row_id = request.data.get('row_id')  # This is the ID within the row's data
-            new_row = request.data.get('new_row', {})
+            table_id = request.data.get('tableId')
+            row_id = request.data.get('rowId')
+            new_row_data = request.data.get('newRowData')
             
-            if not table_id or not row_id:
-                return JsonResponse(
-                    {'error': 'Missing table_id or row_id'},
-                    status=400
-                )
+            if not all([table_id, row_id, new_row_data]):
+                return JsonResponse({
+                    'error': 'Missing required fields: tableId, rowId, newRowData'
+                }, status=400)
             
-            # Find the row where data contains the matching id
-            try:
-                row = JsonTableRow.objects.get(
-                    table_id=table_id,
-                    data__id=row_id  # Look for id in the JSON data
-                )
-            except JsonTableRow.DoesNotExist:
-                return JsonResponse(
-                    {'error': 'Row not found'},
-                    status=404
-                )
+            # Get table
+            json_table = JsonTable.objects.get(pk=table_id)
             
-            # Update the specific fields in the JSON data
-            current_data = row.data or {}
-            for key, value in new_row.items():
-                current_data[key] = value
+            # Get specific row
+            if isinstance(row_id, str):
+                # Find row by data key 'id'
+                row = json_table.rows.get(data__id=row_id)
+            else:
+                # Find row by primary key
+                row = json_table.rows.get(pk=row_id)
             
-            # Preserve the id field
-            if 'id' in current_data:
-                new_row['id'] = current_data['id']
-            
-            row.data = {**current_data, **new_row}
+            # Update row data
+            row.data.update(new_row_data)
             row.save()
-            
-            # Update the modified_at timestamp of the parent table
-            # JsonTable.objects.filter(pk=table_id).update(
-            #     table__modified_at=timezone.now()
-            # )
             
             return JsonResponse({
                 'status': 'success',
@@ -465,7 +389,5 @@ class UpdateTableView(APIView):
             return JsonResponse(
                 {'error': str(e)},
                 status=400
-            )    
-        
-        
+            )
                 

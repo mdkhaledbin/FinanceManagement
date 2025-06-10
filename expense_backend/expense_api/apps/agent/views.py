@@ -4,10 +4,17 @@ from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 from asgiref.sync import async_to_sync
+import time
+
 from ..user_auth.authentication import IsAuthenticatedCustom, decode_refresh_token
 from ..user_auth.permission import JWTAuthentication
-from .serializers import QuerySerializer, ResponseSerializer
+from .serializers import (
+    QuerySerializer, ResponseSerializer, 
+    ChatSessionSerializer, ChatMessageSerializer
+)
+from .models import ChatSession, ChatMessage
 from .client.client import ExpenseMCPClient
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -283,3 +290,216 @@ class AgentStreamingAPIView(APIView):
             pass
         
         return tools_called
+
+
+# ============ CHAT SESSION MANAGEMENT VIEWS ============
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request):
+        """Get all chat sessions for the current user"""
+        try:
+            user = self.get_user(request)
+            sessions = ChatSession.objects.filter(user=user, is_active=True)
+            serializer = ChatSessionSerializer(sessions, many=True)
+            
+            return Response({
+                "message": "Chat sessions retrieved successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """Create a new chat session"""
+        try:
+            user = self.get_user(request)
+            request.user = user  # Add user to request for serializer context
+            
+            serializer = ChatSessionSerializer(data=request.data, context={'request': request})
+            
+            if serializer.is_valid():
+                session = serializer.save()
+                return Response({
+                    "message": "Chat session created successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request, session_id):
+        """Get specific chat session details"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            serializer = ChatSessionSerializer(session)
+            
+            return Response({
+                "message": "Chat session retrieved successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request, session_id):
+        """Update chat session (e.g., title)"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            serializer = ChatSessionSerializer(session, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "message": "Chat session updated successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, session_id):
+        """Delete chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            # Soft delete by marking inactive
+            session.is_active = False
+            session.save()
+            
+            return Response({
+                "message": "Chat session deleted successfully."
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionMessagesView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request, session_id):
+        """Get all messages for a specific chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            messages = ChatMessage.objects.filter(chat_session=session).order_by('timestamp')
+            serializer = ChatMessageSerializer(messages, many=True)
+            
+            return Response({
+                "message": "Chat messages retrieved successfully.",
+                "session_info": {
+                    "session_id": session.session_id,
+                    "title": session.title
+                },
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, session_id):
+        """Clear all messages in a chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            deleted_count = ChatMessage.objects.filter(chat_session=session).delete()[0]
+            
+            return Response({
+                "message": f"Cleared {deleted_count} messages from chat session."
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SaveSessionMessageView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def post(self, request, session_id):
+        """Save a message to a specific chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            request.user = user
+            serializer = ChatMessageSerializer(
+                data=request.data, 
+                context={'request': request, 'chat_session': session}
+            )
+            
+            if serializer.is_valid():
+                message = serializer.save()
+                
+                # Update session timestamp
+                session.save()
+                
+                return Response({
+                    "message": "Message saved successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
