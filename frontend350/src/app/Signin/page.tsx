@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -12,37 +13,110 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { SunIcon, MoonIcon } from "lucide-react";
-import { ThemeProvider, useTheme } from "@/context/ThemeProvider";
+import { useTheme } from "@/context/ThemeProvider";
 import clsx from "clsx";
-import { DataProvider } from "@/context/DataProvider";
-import { SelectedTableProvider } from "@/context/SelectedTableProvider";
+import { registerUser, loginUser } from "../../api/AuthApi";
+import { useUser } from "@/context/AuthProvider";
 
-const SignInForm = () => {
+type FormData = {
+  username: string;
+  email: string;
+  password: string;
+  password2: string;
+  rememberMe: boolean;
+};
+
+const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
+  const [error, setError] = useState("");
+  const [formData, setFormData] = useState<FormData>({
+    username: "",
+    email: "",
+    password: "",
+    password2: "",
+    rememberMe: false,
+  });
+
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+  const { refreshUser } = useUser();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    console.log("Form submitted", { isSignUp, theme });
-    setTimeout(() => setLoading(false), 2000);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+    if (error) setError("");
   };
 
-  const handlePasswordReset = (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetEmailSent(true);
-    setTimeout(() => {
-      setShowForgotPassword(false);
-      setResetEmailSent(false);
-      setResetEmail("");
-    }, 2500);
+  const toggleAuthMode = () => {
+    setIsSignUp((prev) => !prev);
+    setError("");
+    setFormData({
+      username: "",
+      email: "",
+      password: "",
+      password2: "",
+      rememberMe: false,
+    });
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      if (isSignUp) {
+        // Validation: check passwords match
+        if (formData.password !== formData.password2) {
+          setError("Passwords do not match");
+          return;
+        }
+
+        await registerUser({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          password2: formData.password2,
+        });
+      } else {
+        await loginUser({
+          username: formData.username,
+          password: formData.password,
+        });
+      }
+
+      await refreshUser();
+      // Redirect after login/signup
+      router.push("/chat");
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        "An unexpected error occurred";
+      console.log(err);
+
+      setError(errorMessage);
+    }
+  };
+
+  const cardClasses = clsx(
+    "w-full max-w-md rounded-2xl shadow-xl transition-colors",
+    theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white"
+  );
+  const textColor = theme === "dark" ? "text-white" : "text-gray-800";
+  const secondaryTextColor =
+    theme === "dark" ? "text-gray-400" : "text-gray-600";
+  const inputClasses =
+    theme === "dark" ? "bg-gray-700 border-gray-600 text-white" : "";
+  const buttonClasses = clsx(
+    "w-full font-semibold py-3 rounded-lg",
+    theme === "dark"
+      ? "bg-blue-500 hover:bg-blue-600"
+      : "bg-blue-600 hover:bg-blue-700",
+    "text-white"
+  );
 
   return (
     <div
@@ -73,257 +147,136 @@ const SignInForm = () => {
         </Button>
       </div>
 
-      <Card
-        className={clsx(
-          "w-full max-w-md rounded-2xl shadow-xl transition-colors",
-          theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white"
-        )}
-      >
+      <Card className={cardClasses}>
         <CardHeader className="text-center">
-          <CardTitle
-            className={clsx(
-              "text-3xl font-bold",
-              theme === "dark" ? "text-white" : "text-gray-800"
-            )}
-          >
-            {showForgotPassword
-              ? "Reset Password"
-              : isSignUp
-              ? "Create an Account"
-              : "Welcome Back"}
+          <CardTitle className={clsx("text-3xl font-bold", textColor)}>
+            {isSignUp ? "Create an Account" : "Welcome Back"}
           </CardTitle>
-
-          <CardDescription
-            className={clsx(
-              theme === "dark" ? "text-gray-400" : "text-gray-600"
-            )}
-          >
-            {showForgotPassword
-              ? "Enter your email to reset your password"
-              : isSignUp
-              ? "Join FinBot today!"
-              : "Sign in to continue to FinBot"}
+          <CardDescription className={secondaryTextColor}>
+            {isSignUp ? "Join FinBot today!" : "Sign in to continue to FinBot"}
           </CardDescription>
-
-          {!showForgotPassword && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="link"
-                  className={clsx(
-                    "text-sm underline mt-2",
-                    theme === "dark" ? "text-blue-400" : "text-blue-600"
-                  )}
-                >
-                  What can FinBot do?
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="text-sm max-w-sm">
-                • Smart budget tracking<br />
-                • Conversational chatbot for finance help<br />
-                • Real-time analytics & personalized insights<br />
-                • Cross-device sync & AI reminders<br />
-                • Military-grade data protection
-              </PopoverContent>
-            </Popover>
-          )}
         </CardHeader>
 
         <CardContent className="space-y-6 p-6 sm:p-8">
-          {showForgotPassword ? (
-            <form onSubmit={handlePasswordReset} className="space-y-5">
-              <div>
-                <Label
-                  htmlFor="reset-email"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
-                >
-                  Email
-                </Label>
-                <Input
-                  id="reset-email"
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
-                />
-              </div>
-              <Button
-                type="submit"
-                className={clsx(
-                  "w-full font-semibold py-3 rounded-lg",
-                  theme === "dark"
-                    ? "bg-blue-500 hover:bg-blue-600 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
-                )}
-              >
-                {resetEmailSent ? "Email Sent!" : "Send Reset Link"}
-              </Button>
-              <p
-                className={clsx(
-                  "text-center text-sm",
-                  theme === "dark" ? "text-gray-400" : "text-gray-600"
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(false)}
-                  className={clsx(
-                    "font-semibold hover:underline",
-                    theme === "dark" ? "text-blue-400" : "text-blue-600"
-                  )}
-                >
-                  Back to Sign In
-                </button>
-              </p>
-            </form>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {isSignUp && (
-                <div>
-                  <Label
-                    htmlFor="name"
-                    className={clsx(
-                      theme === "dark" ? "text-gray-300" : "text-gray-700"
-                    )}
-                  >
-                    Full Name
-                  </Label>
-                  <Input
-                    id="name"
-                    required
-                    className={clsx(
-                      theme === "dark"
-                        ? "bg-gray-700 border-gray-600 text-white"
-                        : ""
-                    )}
-                  />
-                </div>
+          {error && (
+            <div
+              className={clsx(
+                "flex items-center gap-2 p-3 rounded-lg text-sm",
+                theme === "dark"
+                  ? "bg-red-900/20 text-red-300"
+                  : "bg-red-50 text-red-700"
               )}
+            >
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <Label htmlFor="username" className={textColor}>
+                Username
+              </Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                required
+                value={formData.username}
+                onChange={handleInputChange}
+                className={inputClasses}
+              />
+            </div>
+
+            {isSignUp && (
               <div>
-                <Label
-                  htmlFor="email"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
-                >
+                <Label htmlFor="email" className={textColor}>
                   Email
                 </Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   required
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className={inputClasses}
                 />
               </div>
+            )}
+
+            <div>
+              <Label htmlFor="password" className={textColor}>
+                Password
+              </Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={formData.password}
+                onChange={handleInputChange}
+                className={inputClasses}
+              />
+            </div>
+
+            {isSignUp && (
               <div>
-                <Label
-                  htmlFor="password"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
-                >
-                  Password
+                <Label htmlFor="password2" className={textColor}>
+                  Confirm Password
                 </Label>
                 <Input
-                  id="password"
+                  id="password2"
+                  name="password2"
                   type="password"
                   required
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
+                  value={formData.password2}
+                  onChange={handleInputChange}
+                  className={inputClasses}
                 />
               </div>
+            )}
 
-              {!isSignUp && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="remember" />
-                    <Label
-                      htmlFor="remember"
-                      className={clsx(
-                        "text-sm",
-                        theme === "dark" ? "text-gray-400" : "text-gray-600"
-                      )}
-                    >
-                      Remember me
-                    </Label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPassword(true)}
-                    className={clsx(
-                      "text-sm hover:underline",
-                      theme === "dark" ? "text-blue-400" : "text-blue-600"
-                    )}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-              )}
+            {/* {!isSignUp && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="remember"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, rememberMe: !!checked }))
+                  }
+                />
+                <Label
+                  htmlFor="remember"
+                  className={clsx("text-sm", secondaryTextColor)}
+                >
+                  Remember me
+                </Label>
+              </div>
+            )} */}
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className={clsx(
-                  "w-full font-semibold py-3 rounded-lg",
-                  theme === "dark"
-                    ? "bg-blue-500 hover:bg-blue-600 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
-                )}
-              >
-                {loading ? "Processing..." : isSignUp ? "Sign Up" : "Sign In"}
-              </Button>
-            </form>
-          )}
+            <Button type="submit" className={buttonClasses}>
+              {isSignUp ? "Sign Up" : "Sign In"}
+            </Button>
+          </form>
 
-          {!showForgotPassword && (
-            <p
+          <p className={clsx("text-center text-sm", secondaryTextColor)}>
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button
+              type="button"
+              onClick={toggleAuthMode}
               className={clsx(
-                "text-center text-sm mt-6",
-                theme === "dark" ? "text-gray-400" : "text-gray-600"
+                "font-semibold hover:underline",
+                theme === "dark" ? "text-blue-400" : "text-blue-600"
               )}
             >
-              {isSignUp
-                ? "Already have an account?"
-                : "Don't have an account?"}{" "}
-              <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                className={clsx(
-                  "font-semibold hover:underline",
-                  theme === "dark" ? "text-blue-400" : "text-blue-600"
-                )}
-              >
-                {isSignUp ? "Sign In" : "Sign Up"}
-              </button>
-            </p>
-          )}
+              {isSignUp ? "Sign In" : "Sign Up"}
+            </button>
+          </p>
         </CardContent>
       </Card>
     </div>
   );
 };
 
-const SignInPage = () => (
-  <ThemeProvider>
-    <DataProvider>
-      <SelectedTableProvider>
-        <SignInForm />
-      </SelectedTableProvider>
-    </DataProvider>
-  </ThemeProvider>
-);
-
-export default SignInPage;
+export default AuthForm;

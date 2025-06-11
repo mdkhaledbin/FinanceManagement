@@ -9,15 +9,38 @@ from .serializers import UserSerializer, userRegisterSerializer
 from django.contrib.auth.models import User
 
 # Create your views here.
+
 class UserRegisterView(APIView):
     def post(self, request):
-        serializer = userRegisterSerializer(data= request.data)
+        serializer = userRegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': "User registerd successfully.",
-                             'user': serializer.data
-                             })
-        return Response(serializer.errors)
+            user = serializer.save()
+            access_token = generate_access_token(user)
+            refresh_token = generate_refresh_token(user)
+
+            response = Response({
+                'message': "User registered successfully.",
+                'user': UserSerializer(user).data,
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            })
+
+            # response.set_cookie('refresh_token', refresh_token, httponly=True)
+            # response.set_cookie('access_token', access_token, httponly=True)
+            response.set_cookie(
+                'refresh_token', refresh_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=7*24*60*60  # <-- Important
+            )
+            response.set_cookie(
+                'access_token', access_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
+            
+            return response
+
+        return Response(serializer.errors, status=400)
     
     
 class UserListView(APIView):
@@ -47,8 +70,18 @@ class loginView(APIView):
                                 'access_token': generate_access_token(user),
                                 'refresh_token': generate_refresh_token(user)
                              })
-            response.set_cookie('refresh_token', generate_refresh_token(user), httponly=True)
-            response.set_cookie('access_token', generate_access_token(user), httponly=True)
+            # response.set_cookie('refresh_token', generate_refresh_token(user), httponly=True)
+            # response.set_cookie('access_token', generate_access_token(user), httponly=True)
+            response.set_cookie(
+                'refresh_token', generate_refresh_token(user),
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=7*24*60*60  # <-- Important
+            )
+            response.set_cookie(
+                'access_token', generate_access_token(user),
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
             return response
         return Response({'message': "Invalid credentials."})
     
@@ -145,10 +178,33 @@ class UdateAccessToken(APIView):
                 'access_token': access_token
             })
 
-            response.set_cookie('access_token', access_token, httponly=True)
+            response.set_cookie(
+                'access_token', access_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
             return response
 
         except User.DoesNotExist:
             return Response({'message': "User not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'message': "Invalid refresh token.", 'error': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        
+class MeView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            serializer = UserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to retrieve user info",
+                    "details": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )       
+        

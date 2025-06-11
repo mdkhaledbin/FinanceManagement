@@ -1,7 +1,9 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import { ThemeProvider } from "@/context/ThemeProvider";
+import { UserProvider } from "@/context/AuthProvider"; // Update this import
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,8 +30,22 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        {/* Create a client component wrapper */}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
+  );
+}
+
+// Create a separate client component to wrap the providers
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <UserProvider>
+      <ThemeProvider>
+        {children}
+      </ThemeProvider>
+    </UserProvider>
   );
 }

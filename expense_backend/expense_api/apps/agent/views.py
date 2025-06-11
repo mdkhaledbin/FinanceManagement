@@ -3,37 +3,503 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 from asgiref.sync import async_to_sync
-from .serializers import QuerySerializer, ResponseSerializer
+import time
+
+from ..user_auth.authentication import IsAuthenticatedCustom, decode_refresh_token
+from ..user_auth.permission import JWTAuthentication
+from .serializers import (
+    QuerySerializer, ResponseSerializer, 
+    ChatSessionSerializer, ChatMessageSerializer
+)
+from .models import ChatSession, ChatMessage
 from .client.client import ExpenseMCPClient
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AgentAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
     def post(self, request):
-        input_serializer = QuerySerializer(data=request.data)
-        if not input_serializer.is_valid():
-            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        query = input_serializer.validated_data["query"]
-
         try:
-            # This is the ONLY correct way to call an async method from a sync view
-            response_obj = async_to_sync(self.run_agent)(query)
-            data = {
-                "query": query,
-                "response": response_obj
-            }
-            output_serializer = ResponseSerializer(data)
-            return Response(output_serializer.data, status=status.HTTP_200_OK)
+            # Get user ID from token
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+
+            # Validate input
+            input_serializer = QuerySerializer(data=request.data)
+            if not input_serializer.is_valid():
+                return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Extract data from request
+            query_data = input_serializer.validated_data
+            query_data['user_id'] = user_id  # Add user ID to the data
+
+            # Add additional context if provided
+            if 'table_id' in request.data:
+                query_data['table_id'] = request.data['table_id']
+            if 'context_type' in request.data:
+                query_data['context_type'] = request.data['context_type']
+
+            # Run agent and get response
+            response_obj = async_to_sync(self.run_agent_simple)(query_data)
+            
+            # Process and clean the response
+            cleaned_response = self._clean_response(response_obj)
+            
+            return Response(cleaned_response, status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def run_agent(self, query):
-        async def runner():
-            client = ExpenseMCPClient()
-            await client.connect()
-            print(query)
-            result = await client.process_query(query)
-            await client.disconnect()
-            return result
-        return runner()  # ✅ returns coroutine, not nested run()
+    async def run_agent_simple(self, query_data):
+        """Simplified agent runner that returns raw response."""
+        try:
+            return await ExpenseMCPClient.create_and_run_query(query_data)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get(self, request):
+        """Handle GET requests for basic status information."""
+        try:
+            # Get user ID from token
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+            
+            return Response({
+                "user_id": user_id,
+                "status": "active"
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _clean_response(self, response_obj):
+        """Clean the response by removing step prefixes and extracting tool information."""
+        import re
+        
+        # Initialize the cleaned response structure
+        cleaned_response = {
+            "response": "",
+            "tools_called": []
+        }
+        
+        # Extract the main response text
+        if isinstance(response_obj, dict):
+            if 'response' in response_obj:
+                response_text = str(response_obj['response'])
+            elif 'message' in response_obj:
+                response_text = str(response_obj['message'])
+            else:
+                response_text = str(response_obj)
+            
+            # Extract tools information if available
+            if 'raw_response' in response_obj:
+                cleaned_response['tools_called'] = self._extract_tools_from_raw_response(response_obj['raw_response'])
+        else:
+            response_text = str(response_obj)
+        
+        # Remove step prefixes (Step 1:, Step 2:, etc.) from the beginning
+        response_text = re.sub(r'^Step \d+:\s*[^\n]*\n?', '', response_text, flags=re.MULTILINE)
+        
+        # Also remove any remaining step patterns that might be at the start
+        response_text = re.sub(r'^Step \d+.*?\n', '', response_text)
+        
+        # Clean up extra whitespace and newlines
+        response_text = response_text.strip()
+        
+        cleaned_response['response'] = response_text
+        
+        return cleaned_response
+    
+    def _extract_tools_from_raw_response(self, raw_response):
+        """Extract tool information from raw response."""
+        tools_called = []
+        
+        try:
+            if isinstance(raw_response, dict) and 'messages' in raw_response:
+                messages = raw_response['messages']
+                
+                for message in messages:
+                    if isinstance(message, list) and len(message) > 9:
+                        # Check if this is an AI message with tool calls
+                        if len(message) > 5 and message[5][1] == "ai":
+                            # Look for tool calls in the message
+                            if len(message) > 9 and message[9][0] == "tool_calls":
+                                tool_calls = message[9][1]
+                                
+                                for tool_call in tool_calls:
+                                    if isinstance(tool_call, dict) and 'name' in tool_call:
+                                        tool_info = {
+                                            'name': tool_call['name'],
+                                            'args': tool_call.get('args', {})
+                                        }
+                                        tools_called.append(tool_info)
+        except Exception:
+            # If we can't extract tools, just return empty list
+            pass
+        
+        return tools_called
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AgentHistoryAPIView(APIView):
+    """Simple endpoint for operation history."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def get(self, request):
+        """Get operation history."""
+        try:
+            # Get user ID from token
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+            
+            return Response({
+                "user_id": user_id,
+                "history": []
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AgentStreamingAPIView(APIView):
+    """Simple streaming endpoint that returns unformatted responses."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def post(self, request):
+        """Handle requests with simple response."""
+        try:
+            # Get user ID from token
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+
+            # Validate input
+            input_serializer = QuerySerializer(data=request.data)
+            if not input_serializer.is_valid():
+                return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Extract data from request
+            query_data = input_serializer.validated_data
+            query_data['user_id'] = user_id
+
+            # Add context if provided
+            if 'table_id' in request.data:
+                query_data['table_id'] = request.data['table_id']
+            if 'context_type' in request.data:
+                query_data['context_type'] = request.data['context_type']
+            
+            # Run agent and return simple response
+            response_obj = async_to_sync(self._run_agent)(query_data)
+            
+            # Process and clean the response
+            cleaned_response = self._clean_response(response_obj)
+            
+            return Response(cleaned_response, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    async def _run_agent(self, query_data):
+        """Run agent with simple response."""
+        try:
+            return await ExpenseMCPClient.create_and_run_query(query_data)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _clean_response(self, response_obj):
+        """Clean the response by removing step prefixes and extracting tool information."""
+        import re
+        
+        # Initialize the cleaned response structure
+        cleaned_response = {
+            "response": "",
+            "tools_called": []
+        }
+        
+        # Extract the main response text
+        if isinstance(response_obj, dict):
+            if 'response' in response_obj:
+                response_text = str(response_obj['response'])
+            elif 'message' in response_obj:
+                response_text = str(response_obj['message'])
+            else:
+                response_text = str(response_obj)
+            
+            # Extract tools information if available
+            if 'raw_response' in response_obj:
+                cleaned_response['tools_called'] = self._extract_tools_from_raw_response(response_obj['raw_response'])
+        else:
+            response_text = str(response_obj)
+        
+        # Remove step prefixes (Step 1:, Step 2:, etc.) from the beginning
+        response_text = re.sub(r'^Step \d+:\s*[^\n]*\n?', '', response_text, flags=re.MULTILINE)
+        
+        # Also remove any remaining step patterns that might be at the start
+        response_text = re.sub(r'^Step \d+.*?\n', '', response_text)
+        
+        # Clean up extra whitespace and newlines
+        response_text = response_text.strip()
+        
+        cleaned_response['response'] = response_text
+        
+        return cleaned_response
+    
+    def _extract_tools_from_raw_response(self, raw_response):
+        """Extract tool information from raw response."""
+        tools_called = []
+        
+        try:
+            if isinstance(raw_response, dict) and 'messages' in raw_response:
+                messages = raw_response['messages']
+                
+                for message in messages:
+                    if isinstance(message, list) and len(message) > 9:
+                        # Check if this is an AI message with tool calls
+                        if len(message) > 5 and message[5][1] == "ai":
+                            # Look for tool calls in the message
+                            if len(message) > 9 and message[9][0] == "tool_calls":
+                                tool_calls = message[9][1]
+                                
+                                for tool_call in tool_calls:
+                                    if isinstance(tool_call, dict) and 'name' in tool_call:
+                                        tool_info = {
+                                            'name': tool_call['name'],
+                                            'args': tool_call.get('args', {})
+                                        }
+                                        tools_called.append(tool_info)
+        except Exception:
+            # If we can't extract tools, just return empty list
+            pass
+        
+        return tools_called
+
+
+# ============ CHAT SESSION MANAGEMENT VIEWS ============
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request):
+        """Get all chat sessions for the current user"""
+        try:
+            user = self.get_user(request)
+            sessions = ChatSession.objects.filter(user=user, is_active=True)
+            serializer = ChatSessionSerializer(sessions, many=True)
+            
+            return Response({
+                "message": "Chat sessions retrieved successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """Create a new chat session"""
+        try:
+            user = self.get_user(request)
+            request.user = user  # Add user to request for serializer context
+            
+            serializer = ChatSessionSerializer(data=request.data, context={'request': request})
+            
+            if serializer.is_valid():
+                session = serializer.save()
+                return Response({
+                    "message": "Chat session created successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request, session_id):
+        """Get specific chat session details"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            serializer = ChatSessionSerializer(session)
+            
+            return Response({
+                "message": "Chat session retrieved successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request, session_id):
+        """Update chat session (e.g., title)"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            serializer = ChatSessionSerializer(session, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "message": "Chat session updated successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, session_id):
+        """Delete chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            # Soft delete by marking inactive
+            session.is_active = False
+            session.save()
+            
+            return Response({
+                "message": "Chat session deleted successfully."
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatSessionMessagesView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def get(self, request, session_id):
+        """Get all messages for a specific chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            messages = ChatMessage.objects.filter(chat_session=session).order_by('timestamp')
+            serializer = ChatMessageSerializer(messages, many=True)
+            
+            return Response({
+                "message": "Chat messages retrieved successfully.",
+                "session_info": {
+                    "session_id": session.session_id,
+                    "title": session.title
+                },
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, session_id):
+        """Clear all messages in a chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            deleted_count = ChatMessage.objects.filter(chat_session=session).delete()[0]
+            
+            return Response({
+                "message": f"Cleared {deleted_count} messages from chat session."
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SaveSessionMessageView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def post(self, request, session_id):
+        """Save a message to a specific chat session"""
+        try:
+            user = self.get_user(request)
+            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            
+            request.user = user
+            serializer = ChatMessageSerializer(
+                data=request.data, 
+                context={'request': request, 'chat_session': session}
+            )
+            
+            if serializer.is_valid():
+                message = serializer.save()
+                
+                # Update session timestamp
+                session.save()
+                
+                return Response({
+                    "message": "Message saved successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_user(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise Exception("Refresh token not provided.")
+        user_id = decode_refresh_token(refresh_token)
+        return User.objects.get(id=user_id)
