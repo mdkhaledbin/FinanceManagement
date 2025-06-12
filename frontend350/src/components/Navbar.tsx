@@ -1,10 +1,11 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { LuSunDim } from "react-icons/lu";
 import { HiMoon } from "react-icons/hi2";
+import { HiMenu, HiX, HiLogout, HiUser } from "react-icons/hi";
 import { useTheme } from "@/context/ThemeProvider";
-import { HiMenu, HiX } from "react-icons/hi";
+import { useUser } from "@/context/AuthProvider";
 
 interface SideBarProps {
   isOpen: boolean;
@@ -13,6 +14,13 @@ interface SideBarProps {
 
 const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
   const { theme, setTheme } = useTheme();
+  const { user, signOut } = useUser();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleSignOut = () => {
+    signOut();
+    setShowUserMenu(false);
+  };
 
   return (
     <nav
@@ -86,7 +94,8 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
         </div>
       )}
 
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 md:space-x-4">
+        {/* Theme Toggle */}
         <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           className={`p-2 rounded-full transition-all duration-300 ${
@@ -108,7 +117,85 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
             />
           )}
         </button>
+
+        {/* User Menu */}
+        {user && (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className={`flex items-center space-x-2 p-2 rounded-lg transition-all duration-300 ${
+                theme === "dark"
+                  ? "bg-gray-700 text-white hover:bg-gray-600"
+                  : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+              } shadow-md border ${
+                theme === "dark" ? "border-gray-600" : "border-gray-200"
+              }`}
+              aria-label="User menu"
+            >
+              <HiUser size={18} />
+              <span className="hidden sm:block text-sm font-medium">
+                {user.name || user.username}
+              </span>
+            </button>
+
+            {/* User Dropdown Menu */}
+            {showUserMenu && (
+              <div
+                className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg ${
+                  theme === "dark"
+                    ? "bg-gray-800 border-gray-700"
+                    : "bg-white border-gray-200"
+                } border z-50`}
+              >
+                <div className="py-1">
+                  {/* User Info */}
+                  <div
+                    className={`px-4 py-3 border-b ${
+                      theme === "dark" ? "border-gray-700" : "border-gray-200"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-medium ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {user.name || user.username}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        theme === "dark" ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
+                      {user.email}
+                    </p>
+                  </div>
+
+                  {/* Sign Out */}
+                  <button
+                    onClick={handleSignOut}
+                    className={`w-full flex items-center px-4 py-2 text-sm transition-colors ${
+                      theme === "dark"
+                        ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                  >
+                    <HiLogout className="mr-3 h-4 w-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Click outside to close user menu */}
+      {showUserMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowUserMenu(false)}
+        />
+      )}
     </nav>
   );
 };
