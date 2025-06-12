@@ -3,32 +3,38 @@ import { useTheme } from "@/context/ThemeProvider";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import { ChatMessage, defaultChatMessages } from "@/data/ChatMessages";
-import { sendPrompt, loadChatHistory } from "@/api/ChatApi";
-import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
+import { handleChatOperation } from "@/api/ChatApiReal";
+import { useSelectedTable } from "@/context/SelectedTableProvider";
+import { useTablesContent } from "@/context/DataProviderReal";
 
 const ChatArea = () => {
   const { theme } = useTheme();
-  const { dispatchtablesContent } = useTablesContent();
-  const { dispatchTablesData } = useTablesData();
+  const { selectedTable } = useSelectedTable();
+  const { refreshData } = useTablesContent();
   const [messages, setMessages] = useState<ChatMessage[]>(defaultChatMessages);
   const [inputValue, setInputValue] = useState("");
   const [inputRows, setInputRows] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    // Load chat history on mount
-    (async () => {
-      try {
-        const history = await loadChatHistory();
-        setMessages(history);
-      } catch (error) {
-        console.error("Error loading chat history:", error);
-      }
-    })();
-  }, []);
+  // useEffect(() => {
+  //   // Load chat history on mount
+  //   (async () => {
+  //     try {
+  //       const history = await loadChatHistory();
+  //       setMessages(history);
+  //     } catch (error) {
+  //       console.error("Error loading chat history:", error);
+  //     }
+  //   })();
+  // }, []);
+
+  const isAuthenticated = () => {
+    return !!localStorage.getItem("user");
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -108,12 +114,12 @@ const ChatArea = () => {
 
   const startTypingEffect = (messageId: string, fullText: string) => {
     let currentIndex = 0;
-    const baseSpeed = 20;
-    const minSpeed = 10;
-    const maxSpeed = 40;
+    const baseSpeed = 15;
+    const minSpeed = 8;
+    const maxSpeed = 25;
     const speed = Math.max(
       minSpeed,
-      Math.min(maxSpeed, baseSpeed - fullText.length / 10)
+      Math.min(maxSpeed, baseSpeed - fullText.length / 20)
     );
 
     if (typingIntervalRef.current) {
@@ -149,8 +155,22 @@ const ChatArea = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (inputValue.trim() === "") return;
+    if (inputValue.trim() === "" || isLoading) return;
 
+    // Check authentication
+    if (!isAuthenticated()) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: "Please log in to use the chat feature.",
+        sender: "bot",
+        timestamp: new Date(),
+        displayedText: "Please log in to use the chat feature.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
+
+    // Add user message
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       text: inputValue,
@@ -162,30 +182,52 @@ const ChatArea = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
     setInputRows(1);
+    setIsLoading(true);
+
+    // Add loading bot message
+    const loadingMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      text: "🤔 Thinking...",
+      sender: "bot",
+      timestamp: new Date(),
+      isTyping: true,
+      displayedText: "🤔 Thinking...",
+    };
+
+    setMessages((prev) => [...prev, loadingMessage]);
 
     try {
-      const { botMessage } = await sendPrompt(
+      // Call the agent streaming endpoint with refreshData callback
+      const botMessage = await handleChatOperation(
         userMessage,
-        dispatchTablesData,
-        dispatchtablesContent
+        selectedTable?.toString(),
+        refreshData
       );
 
-      setMessages((prev) => [...prev, { ...botMessage, isTyping: true }]);
+      // Remove loading message and add actual response
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
+      setMessages((prev) => [...prev, botMessage]);
 
       // Start typing effect
-      startTypingEffect(botMessage.id, botMessage.text);
-    } catch (error) {
-      console.error("Failed to send prompt:", error);
+      setTimeout(() => {
+        startTypingEffect(botMessage.id, botMessage.text);
+      }, 300);
+    } catch {
+      // Remove loading message and show error
+      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
 
-      const FailedMessage: ChatMessage = {
-        id: Math.random().toString(),
-        text: "Sorry, something went wrong. Please try again.",
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 3).toString(),
+        text: "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
         sender: "bot",
         timestamp: new Date(),
-        isTyping: false,
+        displayedText:
+          "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
       };
 
-      setMessages((prev) => [...prev, FailedMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -206,13 +248,35 @@ const ChatArea = () => {
             theme === "dark" ? "border-gray-700" : "border-gray-200"
           }`}
         >
-          <h2
-            className={`text-lg font-semibold ${
-              theme === "dark" ? "text-white" : "text-gray-800"
-            }`}
-          >
-            Chat
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2
+              className={`text-lg font-semibold ${
+                theme === "dark" ? "text-white" : "text-gray-800"
+              }`}
+            >
+              AI Finance Assistant
+            </h2>
+            {selectedTable && (
+              <div
+                className={`text-xs px-2 py-1 rounded-full ${
+                  theme === "dark"
+                    ? "bg-blue-600 text-blue-100"
+                    : "bg-blue-100 text-blue-800"
+                }`}
+              >
+                Context: Table {selectedTable}
+              </div>
+            )}
+          </div>
+          {!isAuthenticated() && (
+            <div
+              className={`text-xs mt-2 ${
+                theme === "dark" ? "text-yellow-400" : "text-yellow-600"
+              }`}
+            >
+              Please log in to use chat features
+            </div>
+          )}
         </div>
 
         {/* Messages */}
@@ -242,6 +306,28 @@ const ChatArea = () => {
                       <span className="ml-1 inline-block h-2 w-2 rounded-full bg-gray-400 animate-pulse"></span>
                     )}
                   </div>
+
+                  {/* Show tool information if available */}
+                  {message.agentData?.tools_called &&
+                    message.agentData.tools_called.length > 0 &&
+                    !message.isTyping && (
+                      <div
+                        className={`text-xs mt-2 p-2 rounded border-l-2 ${
+                          theme === "dark"
+                            ? "bg-gray-600 border-blue-400 text-gray-300"
+                            : "bg-gray-100 border-blue-500 text-gray-600"
+                        }`}
+                      >
+                        <div className="font-medium mb-1">Tools Used:</div>
+                        {message.agentData.tools_called.map((tool, index) => (
+                          <div key={index} className="flex items-center gap-1">
+                            <span className="w-1 h-1 bg-current rounded-full"></span>
+                            <span>{tool.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   <div
                     className={`text-xs mt-1 text-right ${
                       message.sender === "user"
@@ -278,7 +364,12 @@ const ChatArea = () => {
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={
+                isAuthenticated()
+                  ? "Ask me about your finances, expenses, or table data..."
+                  : "Please log in to chat..."
+              }
+              disabled={!isAuthenticated() || isLoading}
               rows={inputRows}
               className={`flex-1 p-3 rounded-lg resize-none ${
                 theme === "dark"
@@ -288,20 +379,29 @@ const ChatArea = () => {
                 theme === "dark" ? "border-gray-600" : "border-gray-300"
               } focus:outline-none focus:ring-2 ${
                 theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
-              } overflow-y-auto max-h-32`}
+              } overflow-y-auto max-h-32 ${
+                !isAuthenticated() || isLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
               style={{ minHeight: "44px" }}
             />
             <button
               type="submit"
+              disabled={
+                !isAuthenticated() || isLoading || inputValue.trim() === ""
+              }
               className={`px-4 py-2 rounded-lg font-medium h-fit ${
                 theme === "dark"
                   ? "bg-blue-600 hover:bg-blue-700 text-white"
                   : "bg-blue-500 hover:bg-blue-600 text-white"
               } focus:outline-none focus:ring-2 ${
                 theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
+              } disabled:opacity-50 disabled:cursor-not-allowed ${
+                isLoading ? "animate-pulse" : ""
               }`}
             >
-              Send
+              {isLoading ? "..." : "Send"}
             </button>
           </form>
         </div>

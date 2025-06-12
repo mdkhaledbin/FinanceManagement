@@ -182,11 +182,33 @@ class ExpenseMCPClient:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, "mcpConfig.json")
         print(f"[INFO] Loading MCP config from: {config_path}")
+        
         try:
             with open(config_path, "r") as f:
-                return json.load(f)
+                config = json.load(f)
+            
+            # Dynamically resolve server script path
+            server_script_path = os.path.join(script_dir, "..", "servers", "finance_mcp_server.py")
+            server_script_path = os.path.abspath(server_script_path)
+            
+            # Check if server script exists
+            if not os.path.exists(server_script_path):
+                raise FileNotFoundError(f"MCP server script not found at: {server_script_path}")
+            
+            # Replace placeholder with actual path
+            for server_name, server_config in config.get("mcpServers", {}).items():
+                if "args" in server_config:
+                    server_config["args"] = [
+                        arg.replace("{SERVER_SCRIPT_PATH}", server_script_path) 
+                        for arg in server_config["args"]
+                    ]
+                    print(f"[INFO] Resolved server path for {server_name}: {server_script_path}")
+            
+            return config
         except Exception as e:
             print(f"❌ Failed to read config file: {e}")
+            print(f"❌ Config path attempted: {config_path}")
+            print(f"❌ Script directory: {script_dir}")
             sys.exit(1)
 
     def parse_tool_response(self, response_str: str) -> Dict[str, Any]:

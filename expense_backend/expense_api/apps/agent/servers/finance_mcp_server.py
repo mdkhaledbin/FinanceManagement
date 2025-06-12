@@ -15,8 +15,21 @@ from typing import Optional
 import time
 
 # Django setup - MUST be done before any Django imports
-sys.path.insert(0, '/home/mehedi/03_Projects/FinanceManagement/expense_backend')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_api.settings.development')
+# Calculate the backend path dynamically
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+backend_path = os.path.join(current_script_dir, "..", "..", "..", "..")
+backend_path = os.path.abspath(backend_path)
+
+# Allow override via environment variable
+backend_path = os.environ.get('FINANCE_BACKEND_PATH', backend_path)
+django_settings = os.environ.get('DJANGO_SETTINGS_MODULE', 'expense_api.settings.development')
+
+sys.path.insert(0, backend_path)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', django_settings)
+
+print(f"[INFO] MCP Server starting from: {current_script_dir}")
+print(f"[INFO] Backend path resolved to: {backend_path}")
+print(f"[INFO] Django settings module: {django_settings}")
 
 import django
 from django.conf import settings

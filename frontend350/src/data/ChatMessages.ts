@@ -6,6 +6,25 @@ export interface ChatMessage {
   timestamp: Date;
   isTyping?: boolean;
   displayedText?: string;
+  agentData?: {
+    response: string;
+    tools_called: Array<{
+      name: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      args: Record<string, any>;
+    }>;
+    streaming_info?: {
+      tool_operations: Array<{
+        step: number;
+        tool_name: string;
+        tool_type: string;
+        operation: string;
+        status: string;
+        timestamp: string;
+      }>;
+      status: string;
+    };
+  };
 }
 
 // Default chat messages
