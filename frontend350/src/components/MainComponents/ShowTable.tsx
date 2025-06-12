@@ -118,6 +118,11 @@ const ShowTable = () => {
     header?: string;
   }>({ visible: false, x: 0, y: 0 });
 
+  const [editingHeader, setEditingHeader] = useState<{
+    header: string;
+    value: string;
+  } | null>(null);
+
   // Cell editing handlers
   const handleCellClick = (rowIndex: number, header: string) => {
     if (header === "id") return; // Prevent editing if header is "id"
@@ -457,6 +462,53 @@ const ShowTable = () => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
+  const handleHeaderDoubleClick = (header: string) => {
+    if (header === "id") return; // Don't allow editing the ID header
+    setEditingHeader({ header, value: header });
+  };
+
+  const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (editingHeader) {
+      setEditingHeader({ ...editingHeader, value: e.target.value });
+    }
+  };
+
+  const handleHeaderBlur = async () => {
+    if (!editingHeader) return;
+
+    const { header: oldHeader, value: newHeader } = editingHeader;
+    if (oldHeader === newHeader) {
+      setEditingHeader(null);
+      return;
+    }
+
+    try {
+      await handleJsonTableOperation(
+        {
+          type: "EDIT_HEADER",
+          payload: {
+            tableId: TableContent[0].id,
+            oldHeader,
+            newHeader,
+          },
+        },
+        dispatchtablesContent
+      );
+    } catch (error) {
+      console.error("Failed to edit header:", error);
+    }
+
+    setEditingHeader(null);
+  };
+
+  const handleHeaderKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleHeaderBlur();
+    } else if (e.key === "Escape") {
+      setEditingHeader(null);
+    }
+  };
+
   if (TableContent.length === 0) {
     return (
       <p className="text-gray-500 pt-[5vh] lg:pt-[1vh]">
@@ -551,17 +603,35 @@ const ShowTable = () => {
                   : "border-gray-200 text-gray-600"
               }`}
                     style={{ minWidth: "150px" }}
+                    onDoubleClick={() => handleHeaderDoubleClick(header)}
                     onContextMenu={(e) =>
                       header !== "id" && handleContextMenu(e, undefined, header)
                     }
                   >
                     <div className="flex items-center justify-between">
-                      <span
-                        className={`uppercase tracking-wider text-xs font-semibold
+                      {editingHeader?.header === header ? (
+                        <input
+                          type="text"
+                          value={editingHeader.value}
+                          onChange={handleHeaderChange}
+                          onBlur={handleHeaderBlur}
+                          onKeyDown={handleHeaderKeyDown}
+                          autoFocus
+                          className={`w-full px-2 py-1 rounded-lg focus:ring-2 outline-none transition-all
+                    ${
+                      theme === "dark"
+                        ? "bg-gray-700 border border-blue-500 text-white focus:ring-blue-400"
+                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300"
+                    }`}
+                        />
+                      ) : (
+                        <span
+                          className={`uppercase tracking-wider text-xs font-semibold
                 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-                      >
-                        {header}
-                      </span>
+                        >
+                          {header}
+                        </span>
+                      )}
                       {headers.length > 1 && header !== "id" && (
                         <button
                           onClick={() => handleDeleteColumn(header)}
@@ -649,7 +719,9 @@ const ShowTable = () => {
                             }`}
                             title={String(row[header])}
                           >
-                            {header === "amount"
+                            {header === "id"
+                              ? rowIndex + 1
+                              : header === "amount"
                               ? new Intl.NumberFormat("en-US", {
                                   style: "currency",
                                   currency: "USD",

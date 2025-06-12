@@ -9,7 +9,8 @@ from .views import (
     AddRowView, 
     DynamicTableUpdateView, 
     GetTableContentView,
-    DeleteTableView
+    DeleteTableView,
+    EditHeaderView
 )
 
 urlpatterns = [
@@ -24,4 +25,5 @@ urlpatterns = [
     path('delete-row/', DeleteRowView.as_view(), name='delete-row'),
     path('add-column/', AddColumnView.as_view(), name='add-column'),
     path('delete-column/', DeleteColumnView.as_view(), name='delete-column'),
+    path('edit-header/', EditHeaderView.as_view(), name='edit-header'),
 ]

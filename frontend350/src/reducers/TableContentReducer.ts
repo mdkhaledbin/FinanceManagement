@@ -53,6 +53,14 @@ export type JsonTableAction =
         header: string;
       };
     }
+  | {
+      type: "EDIT_HEADER";
+      payload: {
+        tableId: number;
+        oldHeader: string;
+        newHeader: string;
+      };
+    }
   | { type: "SET_TABLES"; payload: JsonTableItem[] };
 
 export function jsonTableReducer(
@@ -180,6 +188,33 @@ export function jsonTableReducer(
     case "DELETE_TABLE": {
       const { tableId } = action.payload;
       return state.filter((table) => table.id !== tableId);
+    }
+
+    case "EDIT_HEADER": {
+      const { tableId, oldHeader, newHeader } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          const newHeaders = table.data.headers.map((header) =>
+            header === oldHeader ? newHeader : header
+          );
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers: newHeaders,
+              rows: table.data.rows.map((row) => {
+                const newRow = { ...row };
+                if (oldHeader in newRow) {
+                  newRow[newHeader] = newRow[oldHeader];
+                  delete newRow[oldHeader];
+                }
+                return newRow;
+              }),
+            },
+          };
+        }
+        return table;
+      });
     }
 
     default:

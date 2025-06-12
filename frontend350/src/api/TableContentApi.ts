@@ -198,6 +198,19 @@ export const jsonTableApi = {
       header,
     });
   },
+
+  // Edit a header
+  async editHeader(
+    tableId: number,
+    oldHeader: string,
+    newHeader: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>(`/main/edit-header/`, "POST", {
+      tableId,
+      oldHeader,
+      newHeader,
+    });
+  },
 };
 
 // Utility function to handle API calls and dispatch actions
@@ -320,6 +333,22 @@ export const handleJsonTableOperation = async (
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add column");
+        }
+
+        dispatch(action);
+        break;
+      }
+
+      case "EDIT_HEADER": {
+        const { tableId, oldHeader, newHeader } = action.payload;
+        const response = await jsonTableApi.editHeader(
+          tableId,
+          oldHeader,
+          newHeader
+        );
+
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to edit header");
         }
 
         dispatch(action);

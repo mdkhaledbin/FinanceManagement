@@ -458,4 +458,52 @@ class DeleteTableView(APIView):
             return Response({
                 "error": f"Failed to delete table: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EditHeaderView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def post(self, request):
+        try:
+            table_id = request.data.get("tableId")
+            old_header = request.data.get("oldHeader")
+            new_header = request.data.get("newHeader")
+
+            if not all([table_id, old_header, new_header]):
+                return Response({
+                    "error": "Missing required fields: tableId, oldHeader, newHeader"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get the JsonTable instance
+            json_table = get_object_or_404(JsonTable, table_id=table_id)
+
+            # Check if new header already exists
+            if new_header in json_table.headers:
+                return Response({
+                    "error": f"Header '{new_header}' already exists."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update the header in the headers list
+            header_index = json_table.headers.index(old_header)
+            json_table.headers[header_index] = new_header
+            json_table.save()
+
+            # Update the header in all rows
+            for row in json_table.rows.all():
+                if old_header in row.data:
+                    row.data[new_header] = row.data.pop(old_header)
+                    row.save()
+
+            return Response({
+                "message": "Header updated successfully.",
+                "data": {
+                    "headers": json_table.headers
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
