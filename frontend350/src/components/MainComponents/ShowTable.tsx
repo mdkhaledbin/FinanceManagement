@@ -2,9 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
-import { TableRow } from "@/data/TableContent";
+import { TableRow, JsonTableItem } from "@/data/TableContent";
 import { useTheme } from "@/context/ThemeProvider";
 import { handleJsonTableOperation } from "@/api/TableContentApi";
+import { jsonTableApi } from "@/api/TableContentApi";
 
 // Simple icon components for demonstration
 type IconProps = {
@@ -122,6 +123,11 @@ const ShowTable = () => {
     header: string;
     value: string;
   } | null>(null);
+
+  const [isOperationInProgress, setIsOperationInProgress] = useState(false);
+  const [lastOperationError, setLastOperationError] = useState<string | null>(
+    null
+  );
 
   // Cell editing handlers
   const handleCellClick = (rowIndex: number, header: string) => {
@@ -303,16 +309,116 @@ const ShowTable = () => {
     }
   };
 
-  const handleAddRow = async () => {
-    // Create initial row with empty values
-    const newRow: Omit<TableRow, "id"> = {};
-    headers.forEach((header) => {
-      if (header !== "id") {
-        newRow[header] = "";
+  // Add a function to refresh table data
+  const refreshTableData = async () => {
+    try {
+      if (!selectedTable) {
+        throw new Error("No table selected");
       }
-    });
+
+      // Get the current table data
+      const response = await jsonTableApi.getTables();
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to refresh table data");
+      }
+
+      // Update the state with the new data
+      dispatchtablesContent({
+        type: "SET_TABLES",
+        payload: response.data as JsonTableItem[],
+      });
+    } catch (error) {
+      console.error("Failed to refresh table data:", error);
+    }
+  };
+
+  const handleDeleteColumn = async (header: string) => {
+    if (isOperationInProgress) {
+      console.log("Operation already in progress, please wait...");
+      return;
+    }
 
     try {
+      setIsOperationInProgress(true);
+      setLastOperationError(null);
+
+      if (!TableContent || TableContent.length === 0) {
+        throw new Error("No table content available");
+      }
+
+      const tableId = TableContent[0].id;
+      if (!tableId) {
+        throw new Error("Invalid table ID");
+      }
+
+      if (headers.length <= 1) {
+        throw new Error("Cannot delete the last column");
+      }
+
+      if (header === "id") {
+        throw new Error("Cannot delete the ID column");
+      }
+
+      console.log("Deleting column:", { tableId, header });
+
+      // Get current headers excluding the one to be deleted
+      const updatedHeaders = headers.filter((h) => h !== header);
+
+      const response = await handleJsonTableOperation(
+        {
+          type: "EDIT_TABLE_HEADERS",
+          payload: {
+            tableId,
+            headers: updatedHeaders,
+          },
+        },
+        dispatchtablesContent
+      );
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to delete column");
+      }
+
+      // If we reach here, the operation was successful
+      console.log("Column deleted successfully");
+
+      // Refresh table data to ensure consistency
+      await refreshTableData();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Error in handleDeleteColumn:", errorMessage);
+      setLastOperationError(errorMessage);
+      // Refresh table data to recover from error state
+      await refreshTableData();
+    } finally {
+      setIsOperationInProgress(false);
+    }
+  };
+
+  const handleAddRow = async () => {
+    if (isOperationInProgress) {
+      console.log("Operation already in progress, please wait...");
+      return;
+    }
+
+    try {
+      setIsOperationInProgress(true);
+      setLastOperationError(null);
+
+      if (!TableContent || TableContent.length === 0) {
+        throw new Error("No table content available");
+      }
+
+      // Create initial row with empty values
+      const newRow: Omit<TableRow, "id"> = {};
+      headers.forEach((header) => {
+        if (header !== "id") {
+          newRow[header] = "";
+        }
+      });
+
       const response = await handleJsonTableOperation(
         {
           type: "ADD_ROW",
@@ -324,8 +430,15 @@ const ShowTable = () => {
         dispatchtablesContent
       );
 
-      if (response?.success && response?.data) {
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to add row");
+      }
+
+      if (response?.data) {
         console.log("Add Row Response:", response.data);
+
+        // Refresh table data to ensure consistency
+        await refreshTableData();
 
         // Set editing cell after successful addition
         setTimeout(() => {
@@ -338,7 +451,14 @@ const ShowTable = () => {
         }, 0);
       }
     } catch (error) {
-      console.error("Failed to add row:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Failed to add row:", errorMessage);
+      setLastOperationError(errorMessage);
+      // Refresh table data to recover from error state
+      await refreshTableData();
+    } finally {
+      setIsOperationInProgress(false);
     }
   };
 
@@ -380,26 +500,55 @@ const ShowTable = () => {
   };
 
   const handleAddColumn = async () => {
-    const newHeader = `column_${headers.length + 1}`;
+    try {
+      if (!TableContent || TableContent.length === 0) {
+        console.error("No table content available");
+        return;
+      }
 
-    await handleJsonTableOperation(
-      {
-        type: "ADD_COLUMN",
-        payload: {
-          tableId: TableContent[0].id,
-          header: newHeader,
+      const tableId = TableContent[0].id;
+      if (!tableId) {
+        console.error("Invalid table ID");
+        return;
+      }
+
+      // Generate a unique column name
+      const existingHeaders = TableContent[0].data.headers;
+      let columnNumber = existingHeaders.length;
+      let newHeader = `column_${columnNumber}`;
+
+      // Ensure the header name is unique
+      while (existingHeaders.includes(newHeader)) {
+        columnNumber++;
+        newHeader = `column_${columnNumber}`;
+      }
+
+      console.log("Adding new column:", { tableId, newHeader });
+
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_COLUMN",
+          payload: {
+            tableId,
+            header: newHeader,
+          },
         },
-      },
-      dispatchtablesContent
-    );
+        dispatchtablesContent
+      );
 
-    // dispatchtablesContent({
-    //   type: "ADD_COLUMN",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     header: newHeader,
-    //   },
-    // });
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to add column");
+      }
+
+      // If we reach here, the operation was successful
+      console.log("Column added successfully");
+    } catch (error) {
+      console.error(
+        "Error in handleAddColumn:",
+        error instanceof Error ? error.message : "Unknown error occurred"
+      );
+      // Show error to user (you can implement a toast notification here)
+    }
   };
 
   const handleDeleteRow = async (rowId: number | string) => {
@@ -422,22 +571,23 @@ const ShowTable = () => {
     // });
   };
 
-  const handleDeleteColumn = async (header: string) => {
-    if (headers.length <= 1) return; // Don't delete the last column
-
-    const newHeaders = headers.filter((h) => h !== header);
-
-    await handleJsonTableOperation(
-      {
-        type: "EDIT_TABLE_HEADERS",
-        payload: {
-          tableId: TableContent[0].id,
-          headers: newHeaders,
-        },
-      },
-      dispatchtablesContent
-    );
-  };
+  // Update the delete column button to show loading state
+  const renderDeleteColumnButton = (header: string) => (
+    <button
+      onClick={() => handleDeleteColumn(header)}
+      className={`transition-colors ${
+        isOperationInProgress
+          ? "opacity-50 cursor-not-allowed"
+          : theme === "dark"
+          ? "text-gray-500 hover:text-red-400"
+          : "text-gray-400 hover:text-red-500"
+      }`}
+      title="Delete column"
+      disabled={isOperationInProgress}
+    >
+      <TrashIcon className="w-4 h-4" />
+    </button>
+  );
 
   // Context menu
   const handleContextMenu = (
@@ -509,6 +659,33 @@ const ShowTable = () => {
     }
   };
 
+  // Add error display component
+  const ErrorDisplay = () => {
+    if (!lastOperationError) return null;
+
+    return (
+      <div
+        className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50
+        ${
+          theme === "dark"
+            ? "bg-red-900/90 text-red-100"
+            : "bg-red-100 text-red-900"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          <span>{lastOperationError}</span>
+          <button
+            onClick={() => setLastOperationError(null)}
+            className="ml-2 hover:opacity-70"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (TableContent.length === 0) {
     return (
       <p className="text-gray-500 pt-[5vh] lg:pt-[1vh]">
@@ -528,6 +705,7 @@ const ShowTable = () => {
       : "bg-gradient-to-br from-gray-50 to-white text-gray-800 border border-gray-200"
   }`}
     >
+      <ErrorDisplay />
       <div className="scrollbar-custom pt-2 pb-2">
         <div className="min-w-max">
           {/* Enhanced Toolbar */}
@@ -632,20 +810,9 @@ const ShowTable = () => {
                           {header}
                         </span>
                       )}
-                      {headers.length > 1 && header !== "id" && (
-                        <button
-                          onClick={() => handleDeleteColumn(header)}
-                          className={`transition-colors
-                    ${
-                      theme === "dark"
-                        ? "text-gray-500 hover:text-red-400"
-                        : "text-gray-400 hover:text-red-500"
-                    }`}
-                          title="Delete column"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      )}
+                      {headers.length > 1 &&
+                        header !== "id" &&
+                        renderDeleteColumnButton(header)}
                     </div>
                   </th>
                 ))}

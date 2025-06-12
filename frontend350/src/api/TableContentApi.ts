@@ -246,10 +246,34 @@ export const jsonTableApi = {
     tableId: number,
     header: string
   ): Promise<ApiResponse<TableData>> {
-    return apiRequest<TableData>(`/main/add-column/`, "POST", {
-      tableId,
-      header,
-    });
+    try {
+      // Validate inputs
+      if (!tableId || !header) {
+        throw new Error("TableId and header are required");
+      }
+
+      // Ensure header is a string and not empty
+      const sanitizedHeader = String(header).trim();
+      if (!sanitizedHeader) {
+        throw new Error("Header cannot be empty");
+      }
+
+      console.log("Adding column with payload:", {
+        tableId,
+        header: sanitizedHeader,
+      });
+
+      return apiRequest<TableData>(`/main/add-column/`, "POST", {
+        tableId,
+        header: sanitizedHeader,
+      });
+    } catch (error) {
+      console.error("Error in addColumn:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to add column",
+      };
+    }
   },
 
   // Delete a column
@@ -257,10 +281,35 @@ export const jsonTableApi = {
     tableId: number,
     header: string
   ): Promise<ApiResponse<TableData>> {
-    return apiRequest<TableData>(`/main/delete-column/`, "POST", {
-      tableId,
-      header,
-    });
+    try {
+      // Validate inputs
+      if (!tableId || !header) {
+        throw new Error("TableId and header are required");
+      }
+
+      // Ensure header is a string and not empty
+      const sanitizedHeader = String(header).trim();
+      if (!sanitizedHeader) {
+        throw new Error("Header cannot be empty");
+      }
+
+      console.log("Deleting column with payload:", {
+        tableId,
+        header: sanitizedHeader,
+      });
+
+      return apiRequest<TableData>(`/main/delete-column/`, "POST", {
+        tableId,
+        header: sanitizedHeader,
+      });
+    } catch (error) {
+      console.error("Error in deleteColumn:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete column",
+      };
+    }
   },
 
   // Edit a header
@@ -283,9 +332,10 @@ export const handleJsonTableOperation = async (
   dispatch: React.Dispatch<JsonTableAction>
 ) => {
   try {
+    let response;
     switch (action.type) {
       case "ADD_TABLE": {
-        const response = await jsonTableApi.addTable(
+        response = await jsonTableApi.addTable(
           action.payload as CreateTablePayload
         );
 
@@ -296,7 +346,6 @@ export const handleJsonTableOperation = async (
         console.log("TableContentApi - Raw Response:", response);
         console.log("TableContentApi - Response Data:", response.data);
 
-        // Cast the response data to unknown first, then to CreateTableResponse
         const responseData = response.data as unknown as CreateTableResponse;
         const tableData: JsonTableItem = {
           id: responseData.data.id,
@@ -318,7 +367,7 @@ export const handleJsonTableOperation = async (
 
       case "ADD_ROW": {
         const { tableId, row } = action.payload;
-        const response = await jsonTableApi.addRow(tableId, row);
+        response = await jsonTableApi.addRow(tableId, row);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add row");
@@ -326,7 +375,6 @@ export const handleJsonTableOperation = async (
 
         console.log("Add Row Response:", response.data);
 
-        // The backend returns { message: string, data: { id: number, ...rowData } }
         const responseData = response.data as unknown as {
           message: string;
           data: TableRow & { id: number };
@@ -336,7 +384,7 @@ export const handleJsonTableOperation = async (
           type: "ADD_ROW",
           payload: {
             tableId,
-            row: responseData.data, // This now includes the row ID from the backend
+            row: responseData.data,
           },
         });
 
@@ -345,78 +393,74 @@ export const handleJsonTableOperation = async (
 
       case "EDIT_ROW": {
         const { tableId, rowId, newRow } = action.payload;
-        const response = await jsonTableApi.editRow(tableId, rowId, newRow);
+        response = await jsonTableApi.editRow(tableId, rowId, newRow);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to edit row");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       case "DELETE_ROW": {
         const { tableId, rowId } = action.payload;
-        const response = await jsonTableApi.deleteRow(tableId, rowId);
+        response = await jsonTableApi.deleteRow(tableId, rowId);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to delete row");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       case "EDIT_TABLE_HEADERS": {
         const { tableId, headers } = action.payload;
-        const response = await jsonTableApi.updateHeaders(tableId, headers);
+        response = await jsonTableApi.updateHeaders(tableId, headers);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to update headers");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       case "DELETE_TABLE": {
         const { tableId } = action.payload;
-        const response = await jsonTableApi.deleteTable(tableId);
+        response = await jsonTableApi.deleteTable(tableId);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to delete table");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       case "ADD_COLUMN": {
         const { tableId, header } = action.payload;
-        const response = await jsonTableApi.addColumn(tableId, header);
+        response = await jsonTableApi.addColumn(tableId, header);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add column");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       case "EDIT_HEADER": {
         const { tableId, oldHeader, newHeader } = action.payload;
-        const response = await jsonTableApi.editHeader(
-          tableId,
-          oldHeader,
-          newHeader
-        );
+        response = await jsonTableApi.editHeader(tableId, oldHeader, newHeader);
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to edit header");
         }
 
         dispatch(action);
-        break;
+        return response;
       }
 
       default:
@@ -424,6 +468,7 @@ export const handleJsonTableOperation = async (
     }
   } catch (error) {
     console.error("Table operation failed:", error);
+    // Rethrow the error to be handled by the caller
     throw error;
   }
 };
