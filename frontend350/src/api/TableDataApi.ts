@@ -1,6 +1,14 @@
 // src/api/tableApi.ts
-import { getTableData, TableDataType } from "@/data/table";
+import { TableDataType } from "@/data/table";
 import { TableDataAction } from "@/reducers/TableReducer";
+import axios, {
+  AxiosResponse,
+  AxiosError,
+  AxiosRequestConfig,
+  RawAxiosRequestHeaders,
+} from "axios";
+import { getCSRFToken } from "@/utils/csrf";
+import { TableRow, TableData } from "@/data/TableContent";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -14,103 +22,95 @@ interface AddTableDataType {
   id: number;
   table_name: string;
   description: string;
+  headers?: string[];
 }
 
-const tableDataList = getTableData("1");
-
-// Helper for mock API responses
-function mockApiResponse<T>(
-  endpoint: string,
-  method: string,
-  body?: unknown
-): ApiResponse<T> {
-  // GET /tables - Return all tables
-  if (endpoint === "/tables" && method === "GET") {
-    return { success: true, data: tableDataList as unknown as T };
-  }
-
-  // POST /tables - Add new table
-  if (endpoint === "/tables" && method === "POST") {
-    const newTable: TableDataType = {
-      id: Math.max(0, ...tableDataList.map((t) => t.id)) + 1,
-      ...(body as Omit<TableDataType, "id">),
-    };
-    tableDataList.push(newTable);
-    return { success: true, data: newTable as unknown as T };
-  }
-
-  // PATCH /tables/:id - Edit table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "PATCH") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const table = tableDataList.find((t) => t.id === tableId);
-    if (!table) return { success: false, error: "Table not found" };
-
-    Object.assign(table, body);
-    return { success: true, data: table as unknown as T };
-  }
-
-  // DELETE /tables/:id - Delete table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "DELETE") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const index = tableDataList.findIndex((t) => t.id === tableId);
-    if (index === -1) return { success: false, error: "Table not found" };
-
-    tableDataList.splice(index, 1);
-    return { success: true, data: { success: true } as unknown as T };
-  }
-
-  // POST /tables/:id/share - Share table
-  if (endpoint.match(/\/tables\/\d+\/share$/) && method === "POST") {
-    // Placeholder logic for sharing (just returning success for now)
-    return { success: true, data: { success: true } as unknown as T };
-  }
-
-  return {
-    success: false,
-    error: `Mock not implemented for ${method} ${endpoint}`,
-  };
+interface TableContentResponse {
+  id: number;
+  data: TableData;
 }
 
-// API request helper (with mock option)
+interface RowResponse {
+  id: number;
+  data: TableRow;
+}
+
+interface EditTablePayload {
+  id: number;
+  table_name: string;
+  description?: string;
+}
+
+// Create axios instance with base configuration
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Add CSRF token to requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const csrfSafeMethod = /^(GET|HEAD|OPTIONS|TRACE)$/i;
+
+    if (!csrfSafeMethod.test(config.method || "")) {
+      const token = getCSRFToken();
+      if (token) {
+        config.headers["X-CSRFToken"] = token;
+      }
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Helper function for API requests
 const apiRequest = async <T>(
   endpoint: string,
   method: string,
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
-  const USE_MOCK_RESPONSES = true;
-
-  if (USE_MOCK_RESPONSES) {
-    return mockApiResponse<T>(endpoint, method, body);
-  }
-
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const config: AxiosRequestConfig = {
+      url: endpoint,
       method,
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
-    });
+      data: body,
+      headers: headers
+        ? ({
+            ...apiClient.defaults.headers.common,
+            ...headers,
+          } as RawAxiosRequestHeaders)
+        : (apiClient.defaults.headers.common as RawAxiosRequestHeaders),
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    const response: AxiosResponse<T> = await apiClient.request(config);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    if (axiosError.response) {
       return {
         success: false,
-        error: errorData.message || `HTTP error! status: ${response.status}`,
+        error:
+          (axiosError.response.data as { message?: string })?.message ||
+          `HTTP error! status: ${axiosError.response.status}`,
+      };
+    } else if (axiosError.request) {
+      return {
+        success: false,
+        error: "No response received from server",
+      };
+    } else {
+      return {
+        success: false,
+        error: axiosError.message || "An unknown error occurred",
       };
     }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "An unknown error occurred",
-    };
   }
 };
 
@@ -118,39 +118,96 @@ const apiRequest = async <T>(
 export const tableApi = {
   // Get all tables
   async getTables(): Promise<ApiResponse<TableDataType[]>> {
-    return apiRequest<TableDataType[]>("/tables", "GET");
+    return apiRequest<TableDataType[]>("/main/tables/", "GET");
   },
 
   // Add a new table
   async addTable(
     tableData: Omit<AddTableDataType, "id">
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>("/tables", "POST", tableData);
+    return apiRequest<TableDataType>(
+      "/main/create-tableContent/",
+      "POST",
+      tableData
+    );
   },
 
   // Edit a table
   async editTable(
     id: number,
-    updateData: { table_name: string }
+    updateData: { table_name: string; description?: string }
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>(`/tables/${id}`, "PATCH", updateData);
+    return apiRequest<TableDataType>("/main/tables/update/", "PUT", {
+      id,
+      ...updateData,
+    });
   },
 
   // Delete a table
   async deleteTable(id: number): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(`/tables/${id}`, "DELETE");
+    return apiRequest<{ success: boolean }>(`/main/tables/${id}/`, "DELETE");
   },
 
-  // Share a table
-  async shareTable(
-    id: number
-    // shareData: { userIds: string[]; permission: string }
+  // Get table content
+  async getTableContent(): Promise<ApiResponse<TableContentResponse[]>> {
+    return apiRequest<TableContentResponse[]>("/main/table-contents/", "GET");
+  },
+
+  // Add a row to a table
+  async addRow(
+    tableId: number,
+    row: TableRow
+  ): Promise<ApiResponse<RowResponse>> {
+    return apiRequest<RowResponse>("/main/add-row/", "POST", {
+      tableId,
+      row,
+    });
+  },
+
+  // Update a row
+  async updateRow(
+    tableId: number,
+    rowId: number | string,
+    newRowData: Partial<TableRow>
+  ): Promise<ApiResponse<RowResponse>> {
+    return apiRequest<RowResponse>("/main/update-row/", "PATCH", {
+      tableId,
+      rowId,
+      newRowData,
+    });
+  },
+
+  // Delete a row
+  async deleteRow(
+    tableId: number,
+    rowId: number | string
   ): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(
-      `/tables/${id}/share`,
-      "POST"
-      // shareData
-    );
+    return apiRequest<{ success: boolean }>("/main/delete-row/", "POST", {
+      tableId,
+      rowId,
+    });
+  },
+
+  // Add a column
+  async addColumn(
+    tableId: number,
+    header: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>("/main/add-column/", "POST", {
+      tableId,
+      header,
+    });
+  },
+
+  // Delete a column
+  async deleteColumn(
+    tableId: number,
+    header: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>("/main/delete-column/", "POST", {
+      tableId,
+      header,
+    });
   },
 };
 
@@ -162,7 +219,6 @@ export const handleTableOperation = async (
   try {
     switch (action.type) {
       case "ADD_TABLE": {
-        const { id, ...tableData } = action.payload;
         const response = await tableApi.addTable(action.payload);
 
         if (response.error) throw new Error(response.error);
@@ -170,17 +226,21 @@ export const handleTableOperation = async (
         dispatch({
           type: "ADD_TABLE",
           payload: {
-            id: response.data?.id || id,
-            table_name: response.data?.table_name || tableData.table_name,
-            description: response.data?.description || tableData.description,
+            id: response.data?.id ?? action.payload.id,
+            table_name: response.data?.table_name ?? action.payload.table_name,
+            description:
+              response.data?.description ?? action.payload.description,
+            headers: response.data?.headers ?? action.payload.headers,
           },
         });
         break;
       }
 
       case "EDIT": {
-        const response = await tableApi.editTable(action.payload.id, {
-          table_name: action.payload.table_name,
+        const payload = action.payload as EditTablePayload;
+        const response = await tableApi.editTable(payload.id, {
+          table_name: payload.table_name,
+          description: payload.description,
         });
 
         if (response.error) throw new Error(response.error);
@@ -195,16 +255,6 @@ export const handleTableOperation = async (
         if (response.error) throw new Error(response.error);
 
         dispatch(action);
-        break;
-      }
-
-      case "SHARE": {
-        const response = await tableApi.shareTable(action.payload.id);
-
-        if (response.error) throw new Error(response.error);
-
-        console.log("Table shared successfully!");
-        // Optional: dispatch an action to update state
         break;
       }
 

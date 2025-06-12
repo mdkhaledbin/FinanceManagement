@@ -1,11 +1,16 @@
 // src/api/jsonTableApi.ts
-import { JsonTableAction } from "@/reducers/TableContentReducer";
 import {
-  getAllTableContents,
-  JsonTableItem,
-  TableData,
-  TableRow,
-} from "../data/TableContent";
+  JsonTableAction,
+  CreateTablePayload,
+} from "@/reducers/TableContentReducer";
+import { JsonTableItem, TableData, TableRow } from "../data/TableContent";
+import axios, {
+  AxiosResponse,
+  AxiosError,
+  AxiosRequestConfig,
+  RawAxiosRequestHeaders,
+} from "axios";
+import { getCSRFToken } from "@/utils/csrf";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -15,261 +20,44 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-// Create a mutable copy of the static data
-let jsonTableData = [...getAllTableContents()];
-
-function mockApiResponse<T>(
-  endpoint: string,
-  method: string,
-  body?: unknown
-): ApiResponse<T> {
-  // GET /tables - Return all tables
-  if (endpoint === "/tables" && method === "GET") {
-    return { success: true, data: jsonTableData as unknown as T };
-  }
-
-  // POST /tables - Add new table
-  if (endpoint === "/tables" && method === "POST") {
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "id" in body &&
-      "data" in body
-    ) {
-      const newTable: JsonTableItem = {
-        id: Number((body as { id: string | number }).id),
-        data: (body as { data: TableData }).data,
-      };
-      jsonTableData.push(newTable);
-      return { success: true, data: newTable as unknown as T };
-    }
-    return { success: false, error: "Invalid request body" };
-  }
-
-  // DELETE /tables/:id - Delete table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "DELETE") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const index = jsonTableData.findIndex((t) => t.id === tableId);
-    if (index !== -1) {
-      jsonTableData.splice(index, 1);
-      return { success: true, data: { success: true } as unknown as T };
-    }
-    return { success: false, error: "Table not found" };
-  }
-
-  // GET /tables/:id - Get single table
-  if (endpoint.match(/\/tables\/\d+$/) && method === "GET") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const table = jsonTableData.find((t) => t.id === tableId);
-    return table
-      ? { success: true, data: table as unknown as T }
-      : { success: false, error: "Table not found" };
-  }
-
-  // POST /tables/:id/rows - Add row to table
-  if (endpoint.match(/\/tables\/\d+\/rows$/) && method === "POST") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
-    if (tableIndex === -1) return { success: false, error: "Table not found" };
-
-    const table = jsonTableData[tableIndex];
-    const rowData = body as Omit<TableRow, "id">;
-
-    // Generate new row ID
-    const rowIds = table.data.rows
-      .map((r) => (typeof r.id === "number" ? r.id : 0))
-      .filter(Number.isInteger);
-    const newRowId = rowIds.length > 0 ? Math.max(...rowIds) + 1 : 1;
-
-    const newRow: TableRow = {
-      id: newRowId,
-      ...rowData,
-      // Initialize all columns with empty values if they don't exist
-      ...Object.fromEntries(
-        table.data.headers
-          .filter((header) => !(header in rowData))
-          .map((header) => [header, ""])
-      )
-    };
-
-    // Create a new copy of the table with the updated rows
-    const updatedTable = {
-      ...table,
-      data: {
-        ...table.data,
-        rows: [...table.data.rows, newRow]
-      }
-    };
-
-    // Update the table in the array
-    jsonTableData = [
-      ...jsonTableData.slice(0, tableIndex),
-      updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
-    ];
-
-    return { success: true, data: newRow as unknown as T };
-  }
-
-  // PATCH /tables/:id/rows/:rowId - Edit row
-  if (endpoint.match(/\/tables\/\d+\/rows\/\d+$/) && method === "PATCH") {
-    const parts = endpoint.split("/");
-    const tableId = parseInt(parts[2]);
-    const rowId = parseInt(parts[4]);
-    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
-    if (tableIndex === -1) return { success: false, error: "Table not found" };
-
-    const table = jsonTableData[tableIndex];
-    const rowIndex = table.data.rows.findIndex((r) => r.id === rowId);
-    if (rowIndex === -1) return { success: false, error: "Row not found" };
-
-    // Create a new copy of the row with updates
-    const updatedRow = {
-      ...table.data.rows[rowIndex],
-      ...(body as Partial<TableRow>)
-    };
-
-    // Create a new copy of the table with the updated row
-    const updatedTable = {
-      ...table,
-      data: {
-        ...table.data,
-        rows: [
-          ...table.data.rows.slice(0, rowIndex),
-          updatedRow,
-          ...table.data.rows.slice(rowIndex + 1)
-        ]
-      }
-    };
-
-    // Update the table in the array
-    jsonTableData = [
-      ...jsonTableData.slice(0, tableIndex),
-      updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
-    ];
-
-    return { success: true, data: updatedRow as unknown as T };
-  }
-
-  // DELETE /tables/:id/rows/:rowId - Delete row
-  if (endpoint.match(/\/tables\/\d+\/rows\/\d+$/) && method === "DELETE") {
-    const parts = endpoint.split("/");
-    const tableId = parseInt(parts[2]);
-    const rowId = parseInt(parts[4]);
-    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
-    if (tableIndex === -1) return { success: false, error: "Table not found" };
-
-    const table = jsonTableData[tableIndex];
-    const initialLength = table.data.rows.length;
-    
-    // Create a new copy of the table with the row removed
-    const updatedTable = {
-      ...table,
-      data: {
-        ...table.data,
-        rows: table.data.rows.filter((row) => row.id !== rowId)
-      }
-    };
-
-    // Update the table in the array
-    jsonTableData = [
-      ...jsonTableData.slice(0, tableIndex),
-      updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
-    ];
-
-    return { 
-      success: initialLength !== updatedTable.data.rows.length,
-      data: { success: initialLength !== updatedTable.data.rows.length } as unknown as T 
-    };
-  }
-
-  // PUT /tables/:id/headers - Update headers
-  if (endpoint.match(/\/tables\/\d+\/headers$/) && method === "PUT") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
-    if (tableIndex === -1) return { success: false, error: "Table not found" };
-
-    const table = jsonTableData[tableIndex];
-    const { headers } = body as { headers: string[] };
-
-    // Update rows to maintain column consistency
-    const updatedRows = table.data.rows.map((row) => {
-      const newRow: TableRow = { id: row.id };
-      headers.forEach(header => {
-        // Ensure no undefined values are assigned and cast to correct type
-        const value = Object.prototype.hasOwnProperty.call(row, header) ? row[header] : "";
-        newRow[header] = value !== undefined ? value as string | number | boolean | null : "";
-      });
-      return newRow;
-    });
-
-    // Create a new copy of the table with updated headers and rows
-    const updatedTable = {
-      ...table,
-      data: {
-        headers,
-        rows: updatedRows
-      }
-    };
-
-    // Update the table in the array
-    jsonTableData = [
-      ...jsonTableData.slice(0, tableIndex),
-      updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
-    ];
-
-    return { success: true, data: updatedTable.data as unknown as T };
-  }
-
-  // POST /tables/:id/columns - Add column (header + update rows)
-  if (endpoint.match(/\/tables\/\d+\/columns$/) && method === "POST") {
-    const tableId = parseInt(endpoint.split("/")[2]);
-    const tableIndex = jsonTableData.findIndex((t) => t.id === tableId);
-    if (tableIndex === -1) return { success: false, error: "Table not found" };
-
-    const table = jsonTableData[tableIndex];
-    const { header } = body as { header: string };
-    
-    if (table.data.headers.includes(header)) {
-      return { success: false, error: "Column already exists" };
-    }
-
-    // Create new headers array
-    const newHeaders = [...table.data.headers, header];
-
-    // Update rows with the new column
-    const updatedRows = table.data.rows.map(row => ({
-      ...row,
-      [header]: ""
-    }));
-
-    // Create a new copy of the table with updated headers and rows
-    const updatedTable = {
-      ...table,
-      data: {
-        headers: newHeaders,
-        rows: updatedRows
-      }
-    };
-
-    // Update the table in the array
-    jsonTableData = [
-      ...jsonTableData.slice(0, tableIndex),
-      updatedTable,
-      ...jsonTableData.slice(tableIndex + 1)
-    ];
-
-    return { success: true, data: updatedTable.data as unknown as T };
-  }
-
-  return {
-    success: false,
-    error: `Mock not implemented for ${method} ${endpoint}`,
+interface CreateTableResponse {
+  message: string;
+  data: {
+    id: number;
+    table_name: string;
+    headers: string[];
+    created_at: string;
+    description: string;
   };
 }
+
+// Create axios instance with base configuration
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Add CSRF token to requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const csrfSafeMethod = /^(GET|HEAD|OPTIONS|TRACE)$/i;
+
+    if (!csrfSafeMethod.test(config.method || "")) {
+      const token = getCSRFToken();
+      if (token) {
+        config.headers["X-CSRFToken"] = token;
+      }
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Helper function for API requests
 const apiRequest = async <T>(
@@ -278,60 +66,69 @@ const apiRequest = async <T>(
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
-  const USE_MOCK_RESPONSES = true;
-
-  if (USE_MOCK_RESPONSES) {
-    return mockApiResponse<T>(endpoint, method, body);
-  }
-
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const config: AxiosRequestConfig = {
+      url: endpoint,
       method,
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
-    });
+      data: body,
+      headers: headers
+        ? ({
+            ...apiClient.defaults.headers.common,
+            ...headers,
+          } as RawAxiosRequestHeaders)
+        : (apiClient.defaults.headers.common as RawAxiosRequestHeaders),
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    const response: AxiosResponse<T> = await apiClient.request(config);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    if (axiosError.response) {
       return {
         success: false,
-        error: errorData.message || `HTTP error! status: ${response.status}`,
+        error:
+          (axiosError.response.data as { message?: string })?.message ||
+          `HTTP error! status: ${axiosError.response.status}`,
+      };
+    } else if (axiosError.request) {
+      return {
+        success: false,
+        error: "No response received from server",
+      };
+    } else {
+      return {
+        success: false,
+        error: axiosError.message || "An unknown error occurred",
       };
     }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "An unknown error occurred",
-    };
   }
 };
 
 export const jsonTableApi = {
   // Get all tables
   async getTables(): Promise<ApiResponse<JsonTableItem[]>> {
-    return apiRequest<JsonTableItem[]>("/tables", "GET");
+    return apiRequest<JsonTableItem[]>("/main/table-contents/", "GET");
   },
 
   // Add a new table
   async addTable(
-    id: string,
-    tableData: Omit<JsonTableItem, "id">
+    payload: CreateTablePayload
   ): Promise<ApiResponse<JsonTableItem>> {
-    return apiRequest<JsonTableItem>("/tables", "POST", { id, ...tableData });
+    return apiRequest<JsonTableItem>(
+      "/main/create-tableContent/",
+      "POST",
+      payload
+    );
   },
 
   // Delete a table
   async deleteTable(
     tableId: number
   ): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(`/tables/${tableId}`, "DELETE");
+    return apiRequest<{ success: boolean }>(
+      `/main/tables/${tableId}/`,
+      "DELETE"
+    );
   },
 
   // Add a row to a table
@@ -339,7 +136,10 @@ export const jsonTableApi = {
     tableId: number,
     row: Omit<TableRow, "id">
   ): Promise<ApiResponse<TableRow>> {
-    return apiRequest<TableRow>(`/tables/${tableId}/rows`, "POST", row);
+    return apiRequest<TableRow>(`/main/add-row/`, "POST", {
+      tableId,
+      row,
+    });
   },
 
   // Edit a row in a table
@@ -348,11 +148,11 @@ export const jsonTableApi = {
     rowId: number | string,
     updates: Partial<TableRow>
   ): Promise<ApiResponse<TableRow>> {
-    return apiRequest<TableRow>(
-      `/tables/${tableId}/rows/${rowId}`,
-      "PATCH",
-      updates
-    );
+    return apiRequest<TableRow>(`/main/update-row/`, "PATCH", {
+      tableId,
+      rowId,
+      newRowData: updates,
+    });
   },
 
   // Delete a row from a table
@@ -360,10 +160,10 @@ export const jsonTableApi = {
     tableId: number,
     rowId: number | string
   ): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(
-      `/tables/${tableId}/rows/${rowId}`,
-      "DELETE"
-    );
+    return apiRequest<{ success: boolean }>(`/main/delete-row/`, "POST", {
+      tableId,
+      rowId,
+    });
   },
 
   // Update table headers
@@ -371,8 +171,9 @@ export const jsonTableApi = {
     tableId: number,
     headers: string[]
   ): Promise<ApiResponse<TableData>> {
-    return apiRequest<TableData>(`/tables/${tableId}/headers`, "PUT", {
-      headers,
+    return apiRequest<TableData>(`/main/delete-column/`, "POST", {
+      tableId,
+      header: headers[headers.length - 1],
     });
   },
 
@@ -381,7 +182,19 @@ export const jsonTableApi = {
     tableId: number,
     header: string
   ): Promise<ApiResponse<TableData>> {
-    return apiRequest<TableData>(`/tables/${tableId}/columns`, "POST", {
+    return apiRequest<TableData>(`/main/add-column/`, "POST", {
+      tableId,
+      header,
+    });
+  },
+
+  // Delete a column
+  async deleteColumn(
+    tableId: number,
+    header: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>(`/main/delete-column/`, "POST", {
+      tableId,
       header,
     });
   },
@@ -395,21 +208,35 @@ export const handleJsonTableOperation = async (
   try {
     switch (action.type) {
       case "ADD_TABLE": {
-        const { id, data } = action.payload;
-        const response = await jsonTableApi.addTable(String(id), { data});
+        const response = await jsonTableApi.addTable(
+          action.payload as CreateTablePayload
+        );
 
         if (!response.success || response.error) {
           throw new Error(response.error || "Failed to add table");
         }
 
-        dispatch({
-          type: "ADD_TABLE",
-          payload: {
-            id: response.data?.id || id,
-            data: response.data?.data || data,
+        console.log("TableContentApi - Raw Response:", response);
+        console.log("TableContentApi - Response Data:", response.data);
+
+        // Cast the response data to unknown first, then to CreateTableResponse
+        const responseData = response.data as unknown as CreateTableResponse;
+        const tableData: JsonTableItem = {
+          id: responseData.data.id,
+          data: {
+            headers: responseData.data.headers,
+            rows: [],
           },
+        };
+
+        console.log("TableContentApi - Converted Table Data:", tableData);
+
+        dispatch({
+          type: action.type,
+          payload: tableData,
         });
-        break;
+
+        return response;
       }
 
       case "ADD_ROW": {
@@ -420,14 +247,23 @@ export const handleJsonTableOperation = async (
           throw new Error(response.error || "Failed to add row");
         }
 
+        console.log("Add Row Response:", response.data);
+
+        // The backend returns { message: string, data: { id: number, ...rowData } }
+        const responseData = response.data as unknown as {
+          message: string;
+          data: TableRow & { id: number };
+        };
+
         dispatch({
           type: "ADD_ROW",
           payload: {
             tableId,
-            row: response.data || row,
+            row: responseData.data, // This now includes the row ID from the backend
           },
         });
-        break;
+
+        return response;
       }
 
       case "EDIT_ROW": {
@@ -495,6 +331,6 @@ export const handleJsonTableOperation = async (
     }
   } catch (error) {
     console.error("Table operation failed:", error);
-    // Consider dispatching an error action here
+    throw error;
   }
 };

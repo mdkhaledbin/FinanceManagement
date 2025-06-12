@@ -120,7 +120,10 @@ class GetTableContentView(APIView):
                     "data": {
                         "headers": table.headers,  # JSONField is already a list
                         "rows": [
-                            row.data for row in table.rows.all()  # Access rows via related_name
+                            {
+                                "id": row.id,  # Include the row's ID
+                                **row.data  # Include all the row data
+                            } for row in table.rows.all()  # Access rows via related_name
                         ]
                     }
                 }
@@ -156,9 +159,18 @@ class AddRowView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Save the new row
-            JsonTableRow.objects.create(table=json_table, data=new_row)
+            row = JsonTableRow.objects.create(table=json_table, data=new_row)
+            # print(**new_row);
+            # Include the row's ID in the response data
+            response_data = {
+                "id": row.id,  # Include the row's ID
+                **new_row  # Include all the row data
+            }
 
-            return Response({"message": "Row added successfully.", "data":new_row}, status=status.HTTP_201_CREATED)
+            return Response({
+                "message": "Row added successfully.",
+                "data": response_data
+            }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({
@@ -178,6 +190,7 @@ class CreateTableWithHeadersView(APIView):
             
             user_id = decode_refresh_token(refresh_token)
             user = User.objects.get(id=user_id)
+            print(user);
 
             if not user.is_authenticated:
                 return Response({

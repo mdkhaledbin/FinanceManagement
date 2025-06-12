@@ -1,10 +1,21 @@
 import { handleJsonTableOperation } from "@/api/TableContentApi";
-import { handleTableOperation } from "@/api/TableDataApi";
-import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
+import { useTablesContent } from "@/context/DataProviderReal";
 import { useTheme } from "@/context/ThemeProvider";
-import { JsonTableItem } from "@/data/TableContent";
+import { useTablesData } from "@/context/DataProviderReal";
+import { useSelectedTable } from "@/context/SelectedTableProvider";
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
+
+interface CreateTableResponse {
+  message: string;
+  data: {
+    id: number;
+    table_name: string;
+    headers: string[];
+    created_at: string;
+    description: string;
+  };
+}
 
 interface CreateTableModalProps {
   onCloseModal: () => void;
@@ -18,73 +29,65 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const [description, setDescription] = useState("");
   const [headers, setHeaders] = useState("");
   const [error, setError] = useState("");
-  const { dispatchTablesData } = useTablesData();
   const { dispatchtablesContent } = useTablesContent();
+  const { dispatchTablesData } = useTablesData();
+  const { setSelectedTable } = useSelectedTable();
 
   const handleCreateTable = async () => {
-    console.log(`Table will be created.`);
-
     if (!tableName.trim()) {
       setError("Table name is required");
       return;
     }
 
-    // Generate a simple ID (in a real app, this would come from the backend)
-    const newId = Math.floor(Math.random() * 10000) + 1;
+    try {
+      const headersArray = headers
+        .split(",")
+        .map((h) => h.trim())
+        .filter((h) => h);
+      const defaultHeaders = ["id", ...headersArray];
 
-    const headersArray = headers
-      .split(",")
-      .map((h) => h.trim())
-      .filter((h) => h);
-    const defaultHeaders = ["id", ...headersArray];
-
-    const newTableContent: JsonTableItem = {
-      id: newId,
-      data: {
-        headers: defaultHeaders,
-        rows: [],
-      },
-    };
-    await handleTableOperation(
-      {
-        type: "ADD_TABLE",
-        payload: { id: newId, table_name: tableName, description: description },
-      },
-      dispatchTablesData
-    );
-    await handleJsonTableOperation(
-      {
-        type: "ADD_TABLE",
-        payload: {
-          id: newId,
-          data: {
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_TABLE",
+          payload: {
+            table_name: tableName,
             headers: defaultHeaders,
-            rows: [],
+            description: description || "",
           },
         },
-      },
-      dispatchtablesContent
-    );
-    // dispatchtablesContent({
-    //   type: "ADD_TABLE",
-    //   payload: {
-    //     id: newId,
-    //     data: {
-    //       headers: defaultHeaders,
-    //       rows: [],
-    //     },
-    //   },
-    // });
+        dispatchtablesContent
+      );
 
-    // dispatchTablesData({
-    //   type: "ADD_TABLE",
-    //   payload: { id: newId, table_name: tableName, description: description },
-    // });
+      // Also dispatch to the sidebar reducer
+      if (response?.success && response?.data) {
+        const responseData = response.data as unknown as CreateTableResponse;
+        const tableData = responseData.data;
+        console.log("CreateTableModal - Response Data:", response.data);
+        console.log("CreateTableModal - Table Data:", tableData);
 
-    // // onCreateTable(newTable, newTableContent);
-    console.log(`Table to create: ${newTableContent}`);
-    onCloseModal();
+        dispatchTablesData({
+          type: "ADD_TABLE",
+          payload: {
+            id: tableData.id,
+            table_name: tableName,
+            description: description || "",
+            headers: defaultHeaders,
+          },
+        });
+
+        // Select the newly created table
+        console.log("CreateTableModal - Setting Selected Table:", tableData.id);
+        setSelectedTable(tableData.id);
+      }
+
+      onCloseModal();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to create table"
+      );
+    }
   };
+
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onCloseModal();

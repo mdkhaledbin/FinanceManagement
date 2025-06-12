@@ -1,8 +1,23 @@
 import { TableRow, TableData, JsonTableItem } from "../data/TableContent";
 
+export interface CreateTablePayload {
+  table_name: string;
+  headers: string[];
+  description: string;
+}
+
 export type JsonTableAction =
-  | { type: "ADD_TABLE"; payload: { id: number; data: TableData } }
-  | { type: "ADD_ROW"; payload: { tableId: number; row: TableRow } }
+  | {
+      type: "ADD_TABLE";
+      payload: CreateTablePayload | JsonTableItem;
+    }
+  | {
+      type: "ADD_ROW";
+      payload: {
+        tableId: number;
+        row: Omit<TableRow, "id">;
+      };
+    }
   | {
       type: "EDIT_ROW";
       payload: {
@@ -11,13 +26,33 @@ export type JsonTableAction =
         newRow: Partial<TableRow>;
       };
     }
-  | { type: "DELETE_ROW"; payload: { tableId: number; rowId: number | string } }
+  | {
+      type: "DELETE_ROW";
+      payload: {
+        tableId: number;
+        rowId: number | string;
+      };
+    }
   | {
       type: "EDIT_TABLE_HEADERS";
-      payload: { tableId: number; headers: string[] };
+      payload: {
+        tableId: number;
+        headers: string[];
+      };
     }
-  | { type: "DELETE_TABLE"; payload: { tableId: number } }
-  | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } }
+  | {
+      type: "DELETE_TABLE";
+      payload: {
+        tableId: number;
+      };
+    }
+  | {
+      type: "ADD_COLUMN";
+      payload: {
+        tableId: number;
+        header: string;
+      };
+    }
   | { type: "SET_TABLES"; payload: JsonTableItem[] };
 
 export function jsonTableReducer(
@@ -41,11 +76,17 @@ export function jsonTableReducer(
       const { tableId, row } = action.payload;
       return state.map((table) => {
         if (table.id === tableId) {
+          // Create a new row with the data from the backend
+          const newRow: TableRow = {
+            id: row.id || `row-${Date.now()}`,
+            ...row,
+          };
+
           return {
             ...table,
             data: {
               ...table.data,
-              rows: [...table.data.rows, row],
+              rows: [...table.data.rows, newRow],
             },
           };
         }

@@ -108,7 +108,6 @@ const ShowTable = () => {
   } | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const tableRef = useRef<HTMLTableElement>(null);
-  
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -300,75 +299,81 @@ const ShowTable = () => {
   };
 
   const handleAddRow = async () => {
-    const newRow: TableRow = {
-      id: Math.max(...rows.map((r) => Number(r.id)), 0) + 1,
-    };
+    // Create initial row with empty values
+    const newRow: Omit<TableRow, "id"> = {};
     headers.forEach((header) => {
       if (header !== "id") {
         newRow[header] = "";
       }
     });
 
-    await handleJsonTableOperation(
-      {
-        type: "ADD_ROW",
-        payload: {
-          tableId: TableContent[0].id,
-          row: newRow,
+    try {
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_ROW",
+          payload: {
+            tableId: TableContent[0].id,
+            row: newRow,
+          },
         },
-      },
-      dispatchtablesContent
-    );
-    setTimeout(() => {
-      setEditingCell({
-        rowIndex: rows.length,
-        header: headers[1],
-      });
-      setEditValue("");
-    }, 0);
+        dispatchtablesContent
+      );
+
+      if (response?.success && response?.data) {
+        console.log("Add Row Response:", response.data);
+
+        // Set editing cell after successful addition
+        setTimeout(() => {
+          const newRowIndex = rows.length;
+          setEditingCell({
+            rowIndex: newRowIndex,
+            header: headers[1],
+          });
+          setEditValue("");
+        }, 0);
+      }
+    } catch (error) {
+      console.error("Failed to add row:", error);
+    }
   };
+
   const handleDuplicateRow = async (rowId: number | string) => {
-    // console.log("Duplicating row with id:", rowId); // Debug log
     if (rowId === null) return;
 
-    const newRow: TableRow = {
-      id: Math.max(...rows.map((r) => Number(r.id)), 0) + 1,
-    };
     const sourceRow = rows.find((r) => r.id === rowId);
-    // console.log("Source row:", sourceRow); // Debug log
-
     if (!sourceRow) {
       console.error("No row found with id:", rowId);
       return;
     }
 
+    // Create new row with source data
+    const newRow: Omit<TableRow, "id"> = {};
     headers.forEach((header) => {
       if (header !== "id") {
         newRow[header] = sourceRow[header];
       }
     });
 
-    console.log("New duplicated row:", newRow); // Debug log
-
-    await handleJsonTableOperation(
-      {
-        type: "ADD_ROW",
-        payload: {
-          tableId: TableContent[0].id,
-          row: newRow,
+    try {
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_ROW",
+          payload: {
+            tableId: TableContent[0].id,
+            row: newRow,
+          },
         },
-      },
-      dispatchtablesContent
-    );
+        dispatchtablesContent
+      );
 
-    // dispatchtablesContent({
-    //   type: "ADD_ROW",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     row: newRow,
-    //   },
-    // });
+      if (response?.success && response?.data) {
+        console.log("Duplicate Row Response:", response.data);
+      }
+    } catch (error) {
+      console.error("Failed to duplicate row:", error);
+    }
   };
+
   const handleAddColumn = async () => {
     const newHeader = `column_${headers.length + 1}`;
 
@@ -427,14 +432,6 @@ const ShowTable = () => {
       },
       dispatchtablesContent
     );
-
-    // dispatchtablesContent({
-    //   type: "EDIT_TABLE_HEADERS",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     headers: newHeaders,
-    //   },
-    // });
   };
 
   // Context menu
@@ -590,11 +587,7 @@ const ShowTable = () => {
             >
               {rows.map((row, rowIndex) => (
                 <tr
-                  key={
-                    typeof row.id === "string" || typeof row.id === "number"
-                      ? row.id
-                      : rowIndex
-                  }
+                  key={typeof row.id === "string" ? row.id : `row-${rowIndex}`}
                   className={`transition-colors duration-150 group
             ${theme === "dark" ? "hover:bg-gray-800/50" : "hover:bg-gray-50"}`}
                   onContextMenu={(e) => handleContextMenu(e, rowIndex)}
@@ -779,9 +772,7 @@ const ShowTable = () => {
                   : "text-gray-700 hover:bg-gray-100"
               }`}
                 onClick={() => {
-                  // console.log("Context menu row index:", contextMenu.rowIndex); // Debug log
                   const rowId = rows[contextMenu.rowIndex!].id;
-                  // console.log("Row ID to duplicate:", rowId); // Debug log
                   if (typeof rowId === "string" || typeof rowId === "number") {
                     handleDuplicateRow(rowId);
                   }

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { getCSRFToken } from "@/utils/csrf";
 
 // Set base URL for the backend
@@ -10,6 +10,9 @@ const BASE_URL =
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 axiosInstance.interceptors.request.use((config) => {
@@ -103,46 +106,136 @@ export interface UpdateUserPasswordData {
   newpassword2: string;
 }
 
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
 // API Calls
-
-export const registerUser = async (data: RegisterData) => {
-  const response = await axiosInstance.post("/auth/register/", data);
-  console.log(response.data);
-  return response.data;
+export const registerUser = async (
+  data: RegisterData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/register/", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Registration failed",
+    };
+  }
 };
 
-export const loginUser = async (data: LoginData) => {
-  const response = await axiosInstance.post("/auth/login/", data);
-  console.log(response.data);
-  return response.data;
+export const loginUser = async (data: LoginData): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/login/", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Login failed",
+    };
+  }
 };
 
-export const logoutUser = async () => {
-  const response = await axiosInstance.post("/auth/logout/");
-  return response.data;
+export const logoutUser = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/logout/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Logout failed",
+    };
+  }
 };
 
-export const getUsersList = async () => {
-  const response = await axiosInstance.get("/auth/users-list/");
-  return response.data;
+export const getUsersList = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/users-list/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch users",
+    };
+  }
 };
 
-export const getUserDetail = async (userId: number) => {
-  const response = await axiosInstance.get(`/auth/users-list/${userId}/`);
-  return response.data;
+export const getUserDetail = async (
+  userId: number
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get(`/auth/users-list/${userId}/`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch user details",
+    };
+  }
 };
 
-export const updateUserPassword = async (data: UpdateUserPasswordData) => {
-  const response = await axiosInstance.post("/auth/update", data);
-  return response.data;
+export const updateUserPassword = async (
+  data: UpdateUserPasswordData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/update", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update password",
+    };
+  }
 };
 
-export const updateAccessToken = async () => {
-  const response = await axiosInstance.get("/auth/updateAcessToken/");
-  return response.data;
+export const updateAccessToken = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/updateAcessToken/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update access token",
+    };
+  }
 };
 
-export const getSelfDetail = async () => {
-  const response = await axiosInstance.get("/auth/me/");
-  return response.data;
+export const getSelfDetail = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/me/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch user details",
+    };
+  }
 };

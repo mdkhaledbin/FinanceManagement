@@ -34,6 +34,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const fetchTablesContent = async () => {
       const response = await jsonTableApi.getTables();
       if (response.success && response.data) {
+        console.log(response.data);
+        
         dispatchtablesContent({ type: "SET_TABLES", payload: response.data });
       }
     };
@@ -45,6 +47,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const fetchTablesData = async () => {
       const response = await tableApi.getTables();
       if (response.success && response.data) {
+        console.log(response.data);
+        
         dispatchTablesData({ type: "SET_TABLES", payload: response.data });
       }
     };

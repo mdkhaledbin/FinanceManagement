@@ -112,7 +112,7 @@ const SideBar = ({ isOpen, setIsOpen }: SideBarProps) => {
           >
             {tablesData.map((table) => (
               <SideBarEntries
-                key={table.id}
+                key={`table-${table.id}-${table.table_name}`}
                 table={table}
                 onEdit={handleTableEdit}
                 onDelete={handleTableDelete}

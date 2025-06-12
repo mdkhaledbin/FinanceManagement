@@ -1,5 +1,5 @@
 // SideBarEntries.jsx
-"use client"
+"use client";
 import React, { useState, useRef, useEffect } from "react";
 import { SlOptionsVertical } from "react-icons/sl";
 import { TableDataType } from "@/data/table";
@@ -31,7 +31,9 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
   const [showDropDown, setShowDropDown] = useState(false);
 
   const handleSelectTable = (tableId: number | null) => {
-    console.log(`Selected table ${tableId}`);
+    console.log("SideBarEntries - Table ID:", tableId);
+    console.log("SideBarEntries - Current Table:", table);
+    console.log("SideBarEntries - Selected Table State:", selectedTable);
     setSelectedTable(tableId);
   };
 
