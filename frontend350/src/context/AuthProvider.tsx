@@ -47,6 +47,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, [router]);
 
   const refreshUser = useCallback(async () => {
+    const existingUser = localStorage.getItem("user");
+    if (!existingUser && window.location.pathname !== "/signin") {
+      setLoading(false);
+      return;
+    }
+
     try {
       const userData = await getSelfDetail();
       if (userData.success && userData.data) {
