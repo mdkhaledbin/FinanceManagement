@@ -6,6 +6,17 @@ import { ChatMessage, defaultChatMessages } from "@/data/ChatMessages";
 import { handleChatOperation } from "@/api/ChatApiReal";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
 import { useTablesContent } from "@/context/DataProviderReal";
+import SpeechRecognition, {
+  useSpeechRecognition,
+} from "react-speech-recognition";
+
+
+// declare global {
+//   interface Window {
+//     SpeechRecognition: any;
+//     webkitSpeechRecognition: any;
+//   }
+// }
 
 const ChatArea = () => {
   const { theme } = useTheme();
@@ -19,6 +30,15 @@ const ChatArea = () => {
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("en-US");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition();
 
   // useEffect(() => {
   //   // Load chat history on mount
@@ -235,6 +255,56 @@ const ChatArea = () => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  // Update input value when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setInputValue(transcript);
+    }
+  }, [transcript]);
+
+  // Online/Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const handleVoiceInput = () => {
+    if (!isOnline) {
+      alert("ভয়েস রেকগনিশন অফলাইন মোডে উপলব্ধ নয়।");
+      return;
+    }
+
+    if (!browserSupportsSpeechRecognition) {
+      alert("আপনার ব্রাউজার ভয়েস রেকগনিশন সাপোর্ট করে না।");
+      return;
+    }
+
+    if (listening) {
+      SpeechRecognition.stopListening();
+    } else {
+      resetTranscript();
+      SpeechRecognition.startListening({
+        continuous: true,
+        language: selectedLanguage,
+      });
+    }
+  };
+
+  const toggleLanguage = () => {
+    setSelectedLanguage((prev) => (prev === "en-US" ? "bn-BD" : "en-US"));
+    if (listening) {
+      SpeechRecognition.stopListening();
+    }
+  };
+
   return (
     <div
       className={`w-full h-full ${
@@ -354,55 +424,157 @@ const ChatArea = () => {
               : "border-gray-200 bg-gray-50"
           }`}
         >
+          {!isOnline && (
+            <div
+              className={`mb-2 p-2 text-sm rounded ${
+                theme === "dark"
+                  ? "bg-gray-700 text-yellow-300"
+                  : "bg-yellow-100 text-yellow-800"
+              }`}
+            >
+              <p className="flex items-center">
+                <svg
+                  className="w-4 h-4 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                আপনি বর্তমানে অফলাইন মোডে আছেন। কিছু ফিচার সীমিত থাকতে পারে।
+              </p>
+            </div>
+          )}
+
           <form
             ref={formRef}
             onSubmit={handleSendMessage}
-            className="flex gap-2 items-end"
+            className="flex flex-col gap-2"
           >
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isAuthenticated()
-                  ? "Ask me about your finances, expenses, or table data..."
-                  : "Please log in to chat..."
-              }
-              disabled={!isAuthenticated() || isLoading}
-              rows={inputRows}
-              className={`flex-1 p-3 rounded-lg resize-none ${
-                theme === "dark"
-                  ? "bg-gray-600 text-white placeholder-gray-400"
-                  : "bg-white text-gray-800 placeholder-gray-500"
-              } border ${
-                theme === "dark" ? "border-gray-600" : "border-gray-300"
-              } focus:outline-none focus:ring-2 ${
-                theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
-              } overflow-y-auto max-h-32 ${
-                !isAuthenticated() || isLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
-              style={{ minHeight: "44px" }}
-            />
-            <button
-              type="submit"
-              disabled={
-                !isAuthenticated() || isLoading || inputValue.trim() === ""
-              }
-              className={`px-4 py-2 rounded-lg font-medium h-fit ${
-                theme === "dark"
-                  ? "bg-blue-600 hover:bg-blue-700 text-white"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              } focus:outline-none focus:ring-2 ${
-                theme === "dark" ? "focus:ring-blue-500" : "focus:ring-blue-400"
-              } disabled:opacity-50 disabled:cursor-not-allowed ${
-                isLoading ? "animate-pulse" : ""
-              }`}
-            >
-              {isLoading ? "..." : "Send"}
-            </button>
+            <div className="flex gap-2 items-end">
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  isAuthenticated()
+                    ? selectedLanguage === "en-US"
+                      ? "Ask me about your finances, expenses, or table data..."
+                      : "আপনার আর্থিক বিষয়, খরচ, বা টেবিল ডেটা সম্পর্কে জিজ্ঞাসা করুন..."
+                    : "Please log in to chat..."
+                }
+                disabled={!isAuthenticated() || isLoading}
+                rows={inputRows}
+                className={`flex-1 p-3 rounded-lg resize-none ${
+                  theme === "dark"
+                    ? "bg-gray-600 text-white placeholder-gray-400"
+                    : "bg-white text-gray-800 placeholder-gray-500"
+                } border ${
+                  theme === "dark" ? "border-gray-600" : "border-gray-300"
+                } focus:outline-none focus:ring-2 ${
+                  theme === "dark"
+                    ? "focus:ring-blue-500"
+                    : "focus:ring-blue-400"
+                } overflow-y-auto max-h-32 ${
+                  !isAuthenticated() || isLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
+                style={{ minHeight: "44px" }}
+              />
+
+              {/* Language Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleLanguage}
+                className={`px-3 py-2 rounded-lg font-medium h-fit ${
+                  theme === "dark"
+                    ? "bg-gray-600 hover:bg-gray-700 text-white"
+                    : "bg-gray-500 hover:bg-gray-600 text-white"
+                }`}
+              >
+                {selectedLanguage === "en-US" ? "বাংলা" : "English"}
+              </button>
+
+              {/* Voice Input Button */}
+              <button
+                type="button"
+                onClick={handleVoiceInput}
+                disabled={
+                  !isOnline ||
+                  !isAuthenticated() ||
+                  !browserSupportsSpeechRecognition
+                }
+                className={`px-4 py-2 rounded-lg font-medium h-fit ${
+                  theme === "dark"
+                    ? "bg-gray-600 hover:bg-gray-700 text-white"
+                    : "bg-gray-500 hover:bg-gray-600 text-white"
+                } focus:outline-none focus:ring-2 ${
+                  theme === "dark"
+                    ? "focus:ring-gray-500"
+                    : "focus:ring-gray-400"
+                } ${listening ? "animate-pulse" : ""} ${
+                  !isOnline ||
+                  !isAuthenticated() ||
+                  !browserSupportsSpeechRecognition
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
+              >
+                {listening ? (
+                  <span className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                    {selectedLanguage === "en-US" ? "Stop" : "বন্ধ করুন"}
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-1"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {selectedLanguage === "en-US" ? "Voice" : "ভয়েস"}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  !isAuthenticated() || isLoading || inputValue.trim() === ""
+                }
+                className={`px-4 py-2 rounded-lg font-medium h-fit ${
+                  theme === "dark"
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                } focus:outline-none focus:ring-2 ${
+                  theme === "dark"
+                    ? "focus:ring-blue-500"
+                    : "focus:ring-blue-400"
+                } disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isLoading ? "animate-pulse" : ""
+                }`}
+              >
+                {isLoading
+                  ? "..."
+                  : selectedLanguage === "en-US"
+                  ? "Send"
+                  : "পাঠান"}
+              </button>
+            </div>
           </form>
         </div>
       </div>
