@@ -590,17 +590,21 @@ const ShowTable = () => {
     </button>
   );
 
-  // Context menu
   const handleContextMenu = (
     e: React.MouseEvent,
     rowIndex?: number,
     header?: string
   ) => {
     e.preventDefault();
+
+    // Get absolute position accounting for scroll
+    const x = e.clientX + window.scrollX - 265;
+    const y = e.clientY + window.scrollY - 37;
+
     setContextMenu({
       visible: true,
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       rowIndex,
       header,
     });
@@ -981,10 +985,11 @@ const ShowTable = () => {
             : "bg-white/95 border-gray-200"
         }`}
           style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
             transform: "scale(0.95)",
             animation: "scaleIn 0.15s ease-out forwards",
+            transformOrigin: "top left",
           }}
           onClick={(e) => e.stopPropagation()}
         >

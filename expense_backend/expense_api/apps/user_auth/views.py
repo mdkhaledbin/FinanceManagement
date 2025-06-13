@@ -207,4 +207,47 @@ class MeView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )       
+
+class UpdateUserProfile(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        # Get the authenticated user
+        user = request.user
+
+        # Verify password
+        auth_user = authenticate(username=user.username, password=password)
+        if not auth_user:
+            return Response({"message": "Authentication failed"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Check if email or username is provided
+        if not email and not username:
+            return Response({"message": "Email or username is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if email is already taken by another user
+        if email and email != user.email:
+            if User.objects.filter(email=email).exists():
+                return Response({"message": "Email is already taken"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if username is already taken by another user
+        if username and username != user.username:
+            if User.objects.filter(username=username).exists():
+                return Response({"message": "Username is already taken"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update profile
+        if email:
+            user.email = email
+        if username:
+            user.username = username
+        user.save()
+
+        return Response({
+            "message": "Profile updated successfully",
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
         

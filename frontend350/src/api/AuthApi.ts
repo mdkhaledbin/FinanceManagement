@@ -106,6 +106,12 @@ export interface UpdateUserPasswordData {
   newpassword2: string;
 }
 
+export interface UpdateUserProfileData {
+  email?: string;
+  username?: string;
+  password: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -236,6 +242,23 @@ export const getSelfDetail = async (): Promise<ApiResponse<any>> => {
       error:
         (axiosError.response?.data as { message?: string })?.message ||
         "Failed to fetch user details",
+    };
+  }
+};
+
+export const updateUserProfile = async (
+  data: UpdateUserProfileData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/update-profile/", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update profile",
     };
   }
 };

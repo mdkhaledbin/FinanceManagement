@@ -6,7 +6,6 @@ import ToggleChat from "@/components/ToggleChat";
 import { useUser } from "@/context/AuthProvider";
 import { DataProvider } from "@/context/DataProviderReal";
 import { SelectedTableProvider } from "@/context/SelectedTableProvider";
-import { ThemeProvider } from "@/context/ThemeProvider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -35,20 +34,18 @@ const Page = () => {
   };
 
   return (
-    <ThemeProvider>
-      <DataProvider>
-        <SelectedTableProvider>
-          <div className="flex overflow-hidden transition-all duration-500 ease-in-out">
-            <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-            <ToggleChat onToggle={handleShowChat} />
-            <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-            <div className="flex-1 overflow-x-auto">
-              <MainContent showChat={showChatArea} />
-            </div>
+    <DataProvider>
+      <SelectedTableProvider>
+        <div className="flex overflow-hidden transition-all duration-500 ease-in-out">
+          <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+          <ToggleChat onToggle={handleShowChat} />
+          <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+          <div className="flex-1 overflow-x-auto">
+            <MainContent showChat={showChatArea} />
           </div>
-        </SelectedTableProvider>
-      </DataProvider>
-    </ThemeProvider>
+        </div>
+      </SelectedTableProvider>
+    </DataProvider>
   );
 };
 
