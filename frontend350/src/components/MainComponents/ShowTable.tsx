@@ -131,7 +131,12 @@ const ShowTable = () => {
 
   // Cell editing handlers
   const handleCellClick = (rowIndex: number, header: string) => {
-    if (header === "id") return; // Prevent editing if header is "id"
+    // Check if header matches any of the serial number patterns
+    if (
+      header.toLowerCase().match(/^(id|id number|number|no\.?|serial|sr\.?)$/i)
+    ) {
+      return; // Prevent editing if header matches serial number patterns
+    }
 
     const cellValue = rows[rowIndex][header];
     setEditingCell({ rowIndex, header });
@@ -362,15 +367,12 @@ const ShowTable = () => {
 
       console.log("Deleting column:", { tableId, header });
 
-      // Get current headers excluding the one to be deleted
-      const updatedHeaders = headers.filter((h) => h !== header);
-
       const response = await handleJsonTableOperation(
         {
           type: "EDIT_TABLE_HEADERS",
           payload: {
             tableId,
-            headers: updatedHeaders,
+            headers: [header], // Send the header to delete
           },
         },
         dispatchtablesContent
@@ -380,7 +382,6 @@ const ShowTable = () => {
         throw new Error(response?.error || "Failed to delete column");
       }
 
-      // If we reach here, the operation was successful
       console.log("Column deleted successfully");
 
       // Refresh table data to ensure consistency
@@ -698,89 +699,89 @@ const ShowTable = () => {
 
   return (
     <div
-      className={`overflow-auto max-h-[600px] mt-0 rounded-xl shadow-2xl relative
+      className={`overflow-auto h-[90vh] mt-0 rounded-2xl shadow-2xl relative pb-[-5]
   ${
     theme === "dark"
-      ? "bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100"
-      : "bg-gradient-to-br from-gray-50 to-white text-gray-800 border border-gray-200"
+      ? "bg-gradient-to-br from-gray-900 via-gray-800/95 to-gray-900/90 text-gray-100"
+      : "bg-gradient-to-br from-blue-50 via-gray-50 to-indigo-50 text-gray-800 border border-gray-200"
   }`}
     >
       <ErrorDisplay />
       <div className="scrollbar-custom pt-2 pb-2">
         <div className="min-w-max">
-          {/* Enhanced Toolbar */}
+          {/* Enhanced Toolbar with Glass Morphism */}
           <div
-            className={`p-3 border-b flex justify-between items-center
+            className={`p-4 border-b flex justify-between items-center sticky top-0 z-20 backdrop-blur-lg
               ${
                 theme === "dark"
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-gray-50 border-gray-200"
+                  ? "bg-gray-900/80 border-gray-700 shadow-lg"
+                  : "bg-white/80 border-gray-200 shadow-sm"
               }`}
           >
-            <div className="flex items-center space-x-2">
-              <h2 className="text-xl font-semibold">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
                 {selectedTableData[0]?.table_name ?? ""}
               </h2>
               <span
-                className={`px-2 py-1 rounded-full text-xs
+                className={`px-3 py-1 rounded-full text-xs font-medium shadow-inner
         ${
           theme === "dark"
-            ? "bg-blue-900/50 text-blue-300"
-            : "bg-blue-100 text-blue-700"
+            ? "bg-blue-900/30 text-blue-300 border border-blue-800/50"
+            : "bg-blue-100/80 text-blue-700 border border-blue-200"
         }`}
               >
-                {rows.length} entries
+                {rows.length} {rows.length === 1 ? "entry" : "entries"}
               </span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <button
                 onClick={handleAddRow}
-                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 transition-all duration-200 shadow-lg
+                className={`px-5 py-2.5 text-white rounded-xl flex items-center gap-2 transition-all duration-500 ease-in-out shadow-lg hover:scale-[1.02]
           ${
             theme === "dark"
-              ? "bg-blue-600 hover:bg-blue-500 hover:shadow-blue-500/20"
-              : "bg-blue-600 hover:bg-blue-500 hover:shadow-blue-500/30"
+              ? "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-500/30"
+              : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 hover:shadow-blue-400/40"
           }`}
               >
                 <PlusIcon className="w-4 h-4" />
-                Add Transaction
+                <span className="font-medium">Add Row</span>
               </button>
               <button
                 onClick={handleAddColumn}
-                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 transition-all duration-200 shadow-lg
+                className={`px-5 py-2.5 text-white rounded-xl flex items-center gap-2 transition-all duration-500 ease-in-out shadow-lg hover:scale-[1.02]
           ${
             theme === "dark"
-              ? "bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/20"
-              : "bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/30"
+              ? "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 hover:shadow-emerald-500/30"
+              : "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 hover:shadow-emerald-400/40"
           }`}
               >
                 <ColumnIcon className="w-4 h-4" />
-                Add Field
+                <span className="font-medium">Add Field</span>
               </button>
             </div>
           </div>
 
-          {/* Luxurious Table */}
+          {/* Luxurious Table with Enhanced Styling */}
           <table
             ref={tableRef}
             className="min-w-full border-collapse table-fixed text-sm font-sans overflow-x-auto"
             onKeyDown={handleKeyDown}
           >
-            <thead className="sticky top-0 z-10">
+            <thead className="sticky top-16 z-10">
               <tr
-                className={`backdrop-blur-sm
-        ${theme === "dark" ? "bg-gray-800/90" : "bg-white/90"}`}
+                className={`backdrop-blur-lg
+        ${theme === "dark" ? "bg-gray-900/80" : "bg-white/90"} shadow-sm`}
               >
                 {headers.map((header) => (
                   <th
                     key={header}
-                    className={`px-6 py-4 border-b text-left font-medium select-none
+                    className={`px-6 py-4 border-b text-left font-medium select-none transition-colors duration-500 ease-in-out
               ${
                 theme === "dark"
-                  ? "border-gray-700 text-gray-300"
-                  : "border-gray-200 text-gray-600"
+                  ? "border-gray-700 text-gray-300 hover:bg-gray-800/50"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
-                    style={{ minWidth: "150px" }}
+                    style={{ minWidth: "180px" }}
                     onDoubleClick={() => handleHeaderDoubleClick(header)}
                     onContextMenu={(e) =>
                       header !== "id" && handleContextMenu(e, undefined, header)
@@ -795,20 +796,26 @@ const ShowTable = () => {
                           onBlur={handleHeaderBlur}
                           onKeyDown={handleHeaderKeyDown}
                           autoFocus
-                          className={`w-full px-2 py-1 rounded-lg focus:ring-2 outline-none transition-all
+                          className={`w-full px-3 py-2 rounded-xl focus:ring-2 outline-none transition-all shadow-inner
                     ${
                       theme === "dark"
-                        ? "bg-gray-700 border border-blue-500 text-white focus:ring-blue-400"
-                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300"
+                        ? "bg-gray-800 border border-blue-500/70 text-white focus:ring-blue-400/50"
+                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300/50"
                     }`}
                         />
                       ) : (
-                        <span
-                          className={`uppercase tracking-wider text-xs font-semibold
-                ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-                        >
-                          {header}
-                        </span>
+                        <div className="flex items-center">
+                          <span
+                            className={`uppercase tracking-wider text-xs font-bold bg-clip-text text-transparent bg-gradient-to-r
+                              ${
+                                theme === "dark"
+                                  ? "from-blue-400 to-emerald-400"
+                                  : "from-blue-600 to-emerald-600"
+                              }`}
+                          >
+                            {header}
+                          </span>
+                        </div>
                       )}
                       {headers.length > 1 &&
                         header !== "id" &&
@@ -820,22 +827,34 @@ const ShowTable = () => {
             </thead>
             <tbody
               className={`divide-y
-      ${theme === "dark" ? "divide-gray-700" : "divide-gray-200"}`}
+                ${
+                  theme === "dark"
+                    ? "divide-gray-800/50 hover:divide-gray-700/50"
+                    : "divide-gray-100/80 hover:divide-gray-200/80"
+                }`}
             >
               {rows.map((row, rowIndex) => (
                 <tr
                   key={typeof row.id === "string" ? row.id : `row-${rowIndex}`}
-                  className={`transition-colors duration-150 group
-            ${theme === "dark" ? "hover:bg-gray-800/50" : "hover:bg-gray-50"}`}
+                  className={`transition-all duration-500 ease-in-out group
+            ${
+              theme === "dark"
+                ? "hover:bg-gray-800/30 hover:shadow-[0_0_15px_rgba(0,0,0,0.1)]"
+                : "hover:bg-gray-50/70 hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]"
+            }`}
                   onContextMenu={(e) => handleContextMenu(e, rowIndex)}
                 >
                   {headers.map((header) => (
                     <td
                       key={`${rowIndex}-${header}`}
-                      className={`px-6 py-4 ${
+                      className={`px-6 py-4 transition-colors duration-500 ease-in-out ${
                         header === "amount" ? "font-mono" : ""
                       }
-                ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                ${
+                  theme === "dark"
+                    ? "text-gray-300 group-hover:text-gray-100"
+                    : "text-gray-700 group-hover:text-gray-900"
+                }`}
                       onClick={() => handleCellClick(rowIndex, header)}
                     >
                       {editingCell?.rowIndex === rowIndex &&
@@ -846,18 +865,19 @@ const ShowTable = () => {
                           onChange={handleCellChange}
                           onBlur={handleCellBlur}
                           autoFocus
-                          className={`w-full px-3 py-2 rounded-lg focus:ring-2 outline-none transition-all
+                          className={`w-full px-4 py-2.5 rounded-xl transition-all duration-500 ease-in-out shadow-inner
                     ${
                       theme === "dark"
-                        ? "bg-gray-700 border border-blue-500 text-white focus:ring-blue-400"
-                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300"
-                    }`}
+                        ? "bg-gray-800/70 text-white border border-gray-700 hover:border-blue-500/70 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        : "bg-white text-gray-800 border border-gray-200 hover:border-blue-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                    }
+                    outline-none`}
                         />
                       ) : (
                         <div className="flex items-center">
                           {header === "amount" && (
                             <span
-                              className={`mr-2 text-xs ${
+                              className={`mr-2 text-sm ${
                                 parseFloat(String(row[header] ?? 0)) < 0
                                   ? theme === "dark"
                                     ? "text-red-400"
@@ -886,12 +906,18 @@ const ShowTable = () => {
                             }`}
                             title={String(row[header])}
                           >
-                            {header === "id"
+                            {header
+                              .toLowerCase()
+                              .match(
+                                /^(id|id number|number|no\.?|serial|sr\.?)$/i
+                              )
                               ? rowIndex + 1
                               : header === "amount"
                               ? new Intl.NumberFormat("en-US", {
                                   style: "currency",
                                   currency: "USD",
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
                                 }).format(
                                   parseFloat(String(row[header] ?? 0)) || 0
                                 )
@@ -906,32 +932,39 @@ const ShowTable = () => {
             </tbody>
           </table>
 
-          {/* Status Bar */}
+          {/* Premium Status Bar */}
           <div
-            className={`sticky bottom-0 backdrop-blur-sm px-4 py-2 text-xs border-t flex justify-between items-center
+            className={`absolute bottom-0 left-0 right-0 backdrop-blur-lg px-5 py-3 text-xs border-t flex justify-between items-center z-50
               ${
                 theme === "dark"
-                  ? "bg-gray-800/90 border-gray-700 text-gray-400"
-                  : "bg-white/90 border-gray-200 text-gray-500"
-              }`}
+                  ? "bg-gray-900/80 border-gray-700 text-gray-400 shadow-lg"
+                  : "bg-white/90 border-gray-200 text-gray-500 shadow-sm"
+              } w-[100%]`}
           >
-            <div>Last updated: {selectedTableData[0]?.modified_at ?? ""}</div>
-            <div className="flex items-center gap-4 justify-end">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  theme === "dark" ? "bg-blue-500" : "bg-blue-400"
+                }`}
+              ></span>
+              Last updated: {selectedTableData[0]?.modified_at ?? "Just now"}
+            </div>
+            <div className="flex items-center gap-6 justify-end">
+              <span className="flex items-center gap-2">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-3 h-3 rounded-full ${
                     theme === "dark" ? "bg-emerald-400" : "bg-emerald-500"
                   }`}
                 ></span>
-                Income
+                <span className="font-medium">Income</span>
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-2">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-3 h-3 rounded-full ${
                     theme === "dark" ? "bg-red-400" : "bg-red-500"
                   }`}
                 ></span>
-                Expense
+                <span className="font-medium">Expense</span>
               </span>
             </div>
           </div>
@@ -941,19 +974,24 @@ const ShowTable = () => {
       {/* Premium Context Menu */}
       {contextMenu.visible && (
         <div
-          className={`fixed shadow-xl rounded-lg py-1 z-50 overflow-hidden min-w-[180px]
+          className={`fixed shadow-2xl rounded-xl py-1 z-50 overflow-hidden min-w-[200px] backdrop-blur-lg border
         ${
           theme === "dark"
-            ? "bg-gray-800 border border-gray-700"
-            : "bg-white border border-gray-200 shadow-lg"
+            ? "bg-gray-800/90 border-gray-700"
+            : "bg-white/95 border-gray-200"
         }`}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+            transform: "scale(0.95)",
+            animation: "scaleIn 0.15s ease-out forwards",
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.rowIndex !== undefined && (
             <>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -968,14 +1006,14 @@ const ShowTable = () => {
                 }}
               >
                 <TrashIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-red-400" : "text-red-500"
                   }`}
                 />
-                <span>Delete Entry</span>
+                <span className="font-medium">Delete Entry</span>
               </button>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -990,11 +1028,11 @@ const ShowTable = () => {
                 }}
               >
                 <EditIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-blue-400" : "text-blue-500"
                   }`}
                 />
-                <span>Edit Entry</span>
+                <span className="font-medium">Edit Entry</span>
               </button>
               <div
                 className={`my-1 ${
@@ -1004,7 +1042,7 @@ const ShowTable = () => {
                 }`}
               ></div>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -1019,17 +1057,17 @@ const ShowTable = () => {
                 }}
               >
                 <DuplicateIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-purple-400" : "text-purple-500"
                   }`}
                 />
-                <span>Duplicate</span>
+                <span className="font-medium">Duplicate</span>
               </button>
             </>
           )}
           {contextMenu.header && contextMenu.header !== "id" && (
             <button
-              className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+              className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -1041,11 +1079,11 @@ const ShowTable = () => {
               }}
             >
               <TrashIcon
-                className={`w-4 h-4 ${
+                className={`w-5 h-5 ${
                   theme === "dark" ? "text-red-400" : "text-red-500"
                 }`}
               />
-              <span>Delete Column</span>
+              <span className="font-medium">Delete Column</span>
             </button>
           )}
         </div>

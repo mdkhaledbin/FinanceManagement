@@ -38,7 +38,7 @@ const Page = () => {
     <ThemeProvider>
       <DataProvider>
         <SelectedTableProvider>
-          <div className="flex overflow-hidden">
+          <div className="flex overflow-hidden transition-all duration-500 ease-in-out">
             <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
             <ToggleChat onToggle={handleShowChat} />
             <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />

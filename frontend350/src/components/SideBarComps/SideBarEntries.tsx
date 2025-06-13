@@ -101,16 +101,16 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
 
   return (
     <div
-      className={`px-1 sm:px-2 lg:px-3 py-3 sm:py-4 mb-2 sm:mb-3 rounded-lg sm:rounded-xl transition-all duration-300 
+      className={`px-1 sm:px-2 lg:px-3 py-3 sm:py-4 mb-2 sm:mb-3 rounded-lg sm:rounded-xl transition-all duration-500 ease-in-out 
         cursor-pointer group 
         ${
           theme === "dark"
             ? selectedTable === table.id
-              ? "bg-gradient-to-br from-gray-700/80 to-gray-800/90 border-gray-600/50"
-              : "bg-gradient-to-br from-gray-800/80 to-gray-900/90 hover:from-gray-700/80 hover:to-gray-800/90 border-gray-700/50"
+              ? "bg-gradient-to-br from-gray-700/90 to-gray-800/95 border-gray-600/50"
+              : "bg-gradient-to-br from-gray-800/90 to-gray-900/95 hover:from-gray-700/90 hover:to-gray-800/95 border-gray-700/50"
             : selectedTable === table.id
-            ? "bg-gradient-to-br from-gray-100 to-gray-50 border-gray-300"
-            : "bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 border-gray-200"
+            ? "bg-gradient-to-br from-gray-100/95 to-gray-50/95 border-gray-300"
+            : "bg-gradient-to-br from-gray-50/95 to-white/95 hover:from-gray-100/95 hover:to-gray-50/95 border-gray-200"
         }
         border hover:shadow-lg 
         hover:shadow-${theme === "dark" ? "gray-900/30" : "gray-200/80"}
@@ -162,14 +162,22 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
           <h3
             className={`font-medium truncate text-sm sm:text-[15px] ${
               theme === "dark"
-                ? "text-gray-100 group-hover:text-white"
-                : "text-gray-800 group-hover:text-gray-900"
-            } transition-colors duration-200 flex items-center
+                ? "bg-gradient-to-r from-gray-100 to-white bg-clip-text text-transparent group-hover:from-white group-hover:to-gray-100"
+                : "bg-gradient-to-r from-gray-800 to-gray-900 bg-clip-text text-transparent group-hover:from-gray-900 group-hover:to-gray-800"
+            } transition-colors duration-500 ease-in-out flex items-center
             w-[90%]`}
           >
             <p className="inline-flex items-center">
-              {table.table_name}
-              {table.pendingCount > 0 && (
+              <span
+                className={`font-semibold tracking-wide ${
+                  theme === "dark"
+                    ? "bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent"
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent"
+                }`}
+              >
+                {table.table_name}
+              </span>
+              {selectedTable && selectedTable === table.id && table.id > 0 && (
                 <span className="ml-1 sm:ml-2 inline-flex items-center">
                   <span
                     className={`relative inline-flex h-1.5 w-1.5 sm:h-2 sm:w-2 ${
@@ -187,7 +195,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
                       theme === "dark" ? "text-amber-300" : "text-amber-700"
                     }`}
                   >
-                    {table.pendingCount}
+                    on
                   </span>
                 </span>
               )}
@@ -200,7 +208,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             onClick={(e) => {
               handleDropdownToggle(e);
             }}
-            className={`p-0.5 sm:p-1 rounded-md sm:rounded-lg transition-all duration-200 ${
+            className={`p-0.5 sm:p-1 rounded-md sm:rounded-lg transition-all duration-500 ease-in-out ${
               selectedTable === table.id
                 ? "opacity-100"
                 : "opacity-0 group-hover:opacity-100"
@@ -287,7 +295,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
 
       <div className="flex justify-between text-sm gap-1 sm:gap-2 items-baseline relative z-10">
         <p
-          className={`truncate text-xs sm:text-[13px] transition-colors duration-200 ${
+          className={`truncate text-xs sm:text-[13px] transition-colors duration-500 ease-in-out ${
             theme === "dark"
               ? "text-gray-400 group-hover:text-gray-300"
               : "text-gray-500 group-hover:text-gray-600"
@@ -296,7 +304,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
           {table.description || "\u00A0"}
         </p>
         <p
-          className={`text-xs transition-colors duration-200 flex-shrink-0 ${
+          className={`text-xs transition-colors duration-500 ease-in-out flex-shrink-0 ${
             theme === "dark"
               ? "text-gray-500 group-hover:text-gray-400"
               : "text-gray-400 group-hover:text-gray-500"

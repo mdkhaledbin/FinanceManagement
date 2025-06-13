@@ -463,6 +463,18 @@ export const handleJsonTableOperation = async (
         return response;
       }
 
+      case "DELETE_COLUMN": {
+        const { tableId, header } = action.payload;
+        response = await jsonTableApi.deleteColumn(tableId, header);
+
+        if (!response.success || response.error) {
+          throw new Error(response.error || "Failed to delete column");
+        }
+
+        dispatch(action);
+        return response;
+      }
+
       default:
         break;
     }

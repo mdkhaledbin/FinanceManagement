@@ -10,7 +10,6 @@ import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 
-
 // declare global {
 //   interface Window {
 //     SpeechRecognition: any;
@@ -307,31 +306,55 @@ const ChatArea = () => {
 
   return (
     <div
-      className={`w-full h-full ${
-        theme === "dark" ? "bg-gray-800" : "bg-white"
-      }`}
+      className={`w-full h-full transition-colors duration-500 ease-in-out ${
+        theme === "dark"
+          ? "bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950"
+          : "bg-gradient-to-br from-gray-50 via-white to-gray-100"
+      } z-2000`}
     >
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col pt-[8%] lg:pt-[17%] xl:pt-[13%]">
         {/* Header */}
         <div
           className={`p-4 border-b ${
-            theme === "dark" ? "border-gray-700" : "border-gray-200"
-          }`}
+            theme === "dark"
+              ? "border-gray-800 bg-gray-900"
+              : "border-gray-200 bg-white"
+          } shadow-sm`}
         >
           <div className="flex items-center justify-between">
-            <h2
-              className={`text-lg font-semibold ${
-                theme === "dark" ? "text-white" : "text-gray-800"
-              }`}
-            >
-              AI Finance Assistant
-            </h2>
+            <div className="flex items-center space-x-3">
+              <div
+                className={`p-2 rounded-lg ${
+                  theme === "dark" ? "bg-blue-600" : "bg-blue-500"
+                }`}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-white"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <h2
+                className={`text-lg font-semibold ${
+                  theme === "dark" ? "text-gray-100" : "text-gray-900"
+                }`}
+              >
+                AI Finance Assistant
+              </h2>
+            </div>
             {selectedTable && (
               <div
-                className={`text-xs px-2 py-1 rounded-full ${
+                className={`text-xs px-3 py-1 rounded-full font-medium ${
                   theme === "dark"
-                    ? "bg-blue-600 text-blue-100"
-                    : "bg-blue-100 text-blue-800"
+                    ? "bg-blue-900/60 text-blue-100 border border-blue-800"
+                    : "bg-blue-100 text-blue-800 border border-blue-200"
                 }`}
               >
                 Context: Table {selectedTable}
@@ -340,10 +363,22 @@ const ChatArea = () => {
           </div>
           {!isAuthenticated() && (
             <div
-              className={`text-xs mt-2 ${
-                theme === "dark" ? "text-yellow-400" : "text-yellow-600"
+              className={`flex items-center text-xs mt-2 ${
+                theme === "dark" ? "text-amber-400" : "text-amber-600"
               }`}
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z"
+                  clipRule="evenodd"
+                />
+              </svg>
               Please log in to use chat features
             </div>
           )}
@@ -363,17 +398,21 @@ const ChatArea = () => {
                   className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-lg p-3 ${
                     message.sender === "user"
                       ? theme === "dark"
-                        ? "bg-blue-600 text-white"
-                        : "bg-blue-500 text-white"
+                        ? "bg-gradient-to-r from-blue-600 to-blue-700 text-gray-50 ring-2 ring-blue-500/30"
+                        : "bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-2 ring-blue-400/30"
                       : theme === "dark"
-                      ? "bg-gray-700 text-white"
-                      : "bg-gray-200 text-gray-800"
-                  }`}
+                      ? "bg-gradient-to-r from-gray-800 to-gray-900 text-gray-100 ring-2 ring-gray-700/30"
+                      : "bg-gradient-to-r from-white to-gray-50 text-gray-800 ring-2 ring-gray-200/30"
+                  } shadow-sm font-['Inter']`}
                 >
-                  <div className="text-sm">
+                  <div className="text-lg">
                     {renderMessageContent(message.displayedText || "")}
                     {message.isTyping && (
-                      <span className="ml-1 inline-block h-2 w-2 rounded-full bg-gray-400 animate-pulse"></span>
+                      <span className="ml-1 inline-flex space-x-1">
+                        <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse"></span>
+                        <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse delay-75"></span>
+                        <span className="h-2 w-2 rounded-full bg-gray-400 animate-pulse delay-150"></span>
+                      </span>
                     )}
                   </div>
 
@@ -382,17 +421,38 @@ const ChatArea = () => {
                     message.agentData.tools_called.length > 0 &&
                     !message.isTyping && (
                       <div
-                        className={`text-xs mt-2 p-2 rounded border-l-2 ${
+                        className={`text-xs mt-2 p-2 rounded ${
                           theme === "dark"
-                            ? "bg-gray-600 border-blue-400 text-gray-300"
-                            : "bg-gray-100 border-blue-500 text-gray-600"
+                            ? "bg-gray-700/50 text-gray-300 border-l-2 border-blue-500"
+                            : "bg-gray-100 text-gray-700 border-l-2 border-blue-400"
                         }`}
                       >
-                        <div className="font-medium mb-1">Tools Used:</div>
+                        <div className="font-medium mb-1 flex items-center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-3 w-3 mr-1"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Tools Used
+                        </div>
                         {message.agentData.tools_called.map((tool, index) => (
-                          <div key={index} className="flex items-center gap-1">
-                            <span className="w-1 h-1 bg-current rounded-full"></span>
-                            <span>{tool.name}</span>
+                          <div
+                            key={index}
+                            className="flex items-center gap-2 mt-1"
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                theme === "dark" ? "bg-blue-400" : "bg-blue-500"
+                              }`}
+                            ></span>
+                            <span className="font-mono">{tool.name}</span>
                           </div>
                         ))}
                       </div>
@@ -401,7 +461,9 @@ const ChatArea = () => {
                   <div
                     className={`text-xs mt-1 text-right ${
                       message.sender === "user"
-                        ? "text-blue-200"
+                        ? theme === "dark"
+                          ? "text-blue-200"
+                          : "text-blue-100"
                         : theme === "dark"
                         ? "text-gray-400"
                         : "text-gray-500"
@@ -420,43 +482,45 @@ const ChatArea = () => {
         <div
           className={`p-4 border-t ${
             theme === "dark"
-              ? "border-gray-700 bg-gray-700"
-              : "border-gray-200 bg-gray-50"
-          }`}
+              ? "border-gray-800 bg-gradient-to-t from-gray-900 to-gray-950"
+              : "border-gray-200 bg-gradient-to-t from-white to-gray-50"
+          } shadow-sm`}
         >
           {!isOnline && (
             <div
-              className={`mb-2 p-2 text-sm rounded ${
+              className={`mb-3 p-2 text-sm rounded flex items-center ${
                 theme === "dark"
-                  ? "bg-gray-700 text-yellow-300"
-                  : "bg-yellow-100 text-yellow-800"
+                  ? "bg-gray-800 text-amber-300 border border-gray-700"
+                  : "bg-amber-50 text-amber-800 border border-amber-200"
               }`}
             >
-              <p className="flex items-center">
-                <svg
-                  className="w-4 h-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-                আপনি বর্তমানে অফলাইন মোডে আছেন। কিছু ফিচার সীমিত থাকতে পারে।
-              </p>
+              <svg
+                className="w-4 h-4 mr-2 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <span>
+                {selectedLanguage === "en-US"
+                  ? "You're currently offline. Some features may be limited."
+                  : "আপনি বর্তমানে অফলাইন মোডে আছেন। কিছু ফিচার সীমিত থাকতে পারে।"}
+              </span>
             </div>
           )}
 
           <form
             ref={formRef}
             onSubmit={handleSendMessage}
-            className="flex flex-col gap-2"
+            className="flex flex-col gap-3 mb-10"
           >
-            <div className="flex gap-2 items-end">
+            <div className="flex flex-col sm:flex-row gap-2 items-end">
               <textarea
                 ref={textareaRef}
                 value={inputValue}
@@ -471,109 +535,122 @@ const ChatArea = () => {
                 }
                 disabled={!isAuthenticated() || isLoading}
                 rows={inputRows}
-                className={`flex-1 p-3 rounded-lg resize-none ${
+                className={`flex-1 p-3 rounded-lg resize-none transition-all duration-500 ease-in-out font-['Inter'] ${
                   theme === "dark"
-                    ? "bg-gray-600 text-white placeholder-gray-400"
-                    : "bg-white text-gray-800 placeholder-gray-500"
-                } border ${
-                  theme === "dark" ? "border-gray-600" : "border-gray-300"
-                } focus:outline-none focus:ring-2 ${
+                    ? "bg-gray-800/50 text-gray-100 placeholder-gray-400 border-gray-700 focus:border-blue-500"
+                    : "bg-white/80 text-gray-800 placeholder-gray-500 border-gray-300 focus:border-blue-400"
+                } border focus:outline-none focus:ring-2 ${
                   theme === "dark"
-                    ? "focus:ring-blue-500"
-                    : "focus:ring-blue-400"
-                } overflow-y-auto max-h-32 ${
+                    ? "focus:ring-blue-500/30"
+                    : "focus:ring-blue-400/30"
+                } overflow-y-auto max-h-40 ${
                   !isAuthenticated() || isLoading
                     ? "opacity-50 cursor-not-allowed"
                     : ""
                 }`}
-                style={{ minHeight: "44px" }}
+                style={{ minHeight: "60px" }}
               />
 
-              {/* Language Toggle Button */}
-              <button
-                type="button"
-                onClick={toggleLanguage}
-                className={`px-3 py-2 rounded-lg font-medium h-fit ${
-                  theme === "dark"
-                    ? "bg-gray-600 hover:bg-gray-700 text-white"
-                    : "bg-gray-500 hover:bg-gray-600 text-white"
-                }`}
-              >
-                {selectedLanguage === "en-US" ? "বাংলা" : "English"}
-              </button>
+              <div className="flex gap-2 mb-1 w-full sm:w-auto justify-end">
+                {/* Language Toggle Button */}
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  className={`p-2 rounded-lg h-fit transition-colors duration-500 ease-in-out ${
+                    theme === "dark"
+                      ? "bg-gray-700/80 hover:bg-gray-600 text-gray-200"
+                      : "bg-gray-100/80 hover:bg-gray-200 text-gray-700"
+                  }`}
+                  aria-label="Toggle language"
+                >
+                  {selectedLanguage === "en-US" ? (
+                    <span className="text-xs font-medium">বাংলা</span>
+                  ) : (
+                    <span className="text-xs font-medium">EN</span>
+                  )}
+                </button>
 
-              {/* Voice Input Button */}
-              <button
-                type="button"
-                onClick={handleVoiceInput}
-                disabled={
-                  !isOnline ||
-                  !isAuthenticated() ||
-                  !browserSupportsSpeechRecognition
-                }
-                className={`px-4 py-2 rounded-lg font-medium h-fit ${
-                  theme === "dark"
-                    ? "bg-gray-600 hover:bg-gray-700 text-white"
-                    : "bg-gray-500 hover:bg-gray-600 text-white"
-                } focus:outline-none focus:ring-2 ${
-                  theme === "dark"
-                    ? "focus:ring-gray-500"
-                    : "focus:ring-gray-400"
-                } ${listening ? "animate-pulse" : ""} ${
-                  !isOnline ||
-                  !isAuthenticated() ||
-                  !browserSupportsSpeechRecognition
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-              >
-                {listening ? (
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
-                    {selectedLanguage === "en-US" ? "Stop" : "বন্ধ করুন"}
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 mr-1"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {selectedLanguage === "en-US" ? "Voice" : "ভয়েস"}
-                  </span>
-                )}
-              </button>
+                {/* Voice Input Button */}
+                <button
+                  type="button"
+                  onClick={handleVoiceInput}
+                  disabled={
+                    !isOnline ||
+                    !isAuthenticated() ||
+                    !browserSupportsSpeechRecognition
+                  }
+                  className={`p-2 rounded-lg h-fit transition-colors duration-500 ease-in-out ${
+                    theme === "dark"
+                      ? listening
+                        ? "bg-red-600/20 hover:bg-red-600/30 text-red-400"
+                        : "bg-gray-700/80 hover:bg-gray-600 text-gray-200"
+                      : listening
+                      ? "bg-red-100 hover:bg-red-200 text-red-600"
+                      : "bg-gray-100/80 hover:bg-gray-200 text-gray-700"
+                  } ${
+                    !isOnline ||
+                    !isAuthenticated() ||
+                    !browserSupportsSpeechRecognition
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                  aria-label="Voice input"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
 
-              <button
-                type="submit"
-                disabled={
-                  !isAuthenticated() || isLoading || inputValue.trim() === ""
-                }
-                className={`px-4 py-2 rounded-lg font-medium h-fit ${
-                  theme === "dark"
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-blue-500 hover:bg-blue-600 text-white"
-                } focus:outline-none focus:ring-2 ${
-                  theme === "dark"
-                    ? "focus:ring-blue-500"
-                    : "focus:ring-blue-400"
-                } disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isLoading ? "animate-pulse" : ""
-                }`}
-              >
-                {isLoading
-                  ? "..."
-                  : selectedLanguage === "en-US"
-                  ? "Send"
-                  : "পাঠান"}
-              </button>
+                <button
+                  type="submit"
+                  disabled={
+                    !isAuthenticated() || isLoading || inputValue.trim() === ""
+                  }
+                  className={`p-2 rounded-lg h-fit transition-colors duration-500 ease-in-out ${
+                    theme === "dark"
+                      ? "bg-blue-600/90 hover:bg-blue-500 text-white"
+                      : "bg-blue-500/90 hover:bg-blue-400 text-white"
+                  } disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isLoading ? "animate-pulse" : ""
+                  }`}
+                  aria-label="Send message"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Disclaimer text */}
+            <div
+              className={`text-xs mt-1 pb-2 px-1 text-center ${
+                theme === "dark" ? "text-gray-500" : "text-gray-400"
+              }`}
+            >
+              <p>
+                {selectedLanguage === "en-US"
+                  ? "AI may produce inaccurate information. All content is protected by copyright."
+                  : "AI ভুল তথ্য দিতে পারে। সমস্ত কন্টেন্ট কপিরাইট দ্বারা সুরক্ষিত।"}
+              </p>
             </div>
           </form>
         </div>

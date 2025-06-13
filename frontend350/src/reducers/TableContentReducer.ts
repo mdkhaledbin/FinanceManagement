@@ -61,6 +61,13 @@ export type JsonTableAction =
         newHeader: string;
       };
     }
+  | {
+      type: "DELETE_COLUMN";
+      payload: {
+        tableId: number;
+        header: string;
+      };
+    }
   | { type: "SET_TABLES"; payload: JsonTableItem[] };
 
 export function jsonTableReducer(
@@ -208,6 +215,27 @@ export function jsonTableReducer(
                   newRow[newHeader] = newRow[oldHeader];
                   delete newRow[oldHeader];
                 }
+                return newRow;
+              }),
+            },
+          };
+        }
+        return table;
+      });
+    }
+
+    case "DELETE_COLUMN": {
+      const { tableId, header } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers: table.data.headers.filter((h) => h !== header),
+              rows: table.data.rows.map((row) => {
+                const newRow = { ...row };
+                delete newRow[header];
                 return newRow;
               }),
             },
