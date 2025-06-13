@@ -42,18 +42,49 @@ class ChatSessionSerializer(serializers.ModelSerializer):
 class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
-        fields = [
-            'id', 'message_id', 'text', 'sender', 'timestamp', 
-            'is_typing', 'displayed_text', 'agent_data'
-        ]
+        fields = ['id', 'message_id', 'text', 'sender', 'timestamp', 'is_typing', 'displayed_text', 'agent_data']
         read_only_fields = ['id', 'timestamp']
-    
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Convert timestamp to ISO format string
+        if data['timestamp']:
+            data['timestamp'] = instance.timestamp.isoformat()
+        return data
+
+    def validate(self, data):
+        # Ensure required fields are present
+        required_fields = ['message_id', 'text', 'sender']
+        for field in required_fields:
+            if field not in data:
+                raise serializers.ValidationError({field: "This field is required."})
+        
+        # Validate sender
+        if data['sender'] not in ['user', 'bot']:
+            raise serializers.ValidationError({"sender": "Sender must be either 'user' or 'bot'"})
+        
+        return data
+
     def create(self, validated_data):
         user = self.context['request'].user
-        chat_session = self.context['chat_session']
-        validated_data['user'] = user
-        validated_data['chat_session'] = chat_session
-        return super().create(validated_data)
+        chat_session = self.context.get('chat_session')
+        
+        if not chat_session:
+            raise serializers.ValidationError("Chat session is required")
+        
+        # Create message with all required fields
+        message = ChatMessage.objects.create(
+            chat_session=chat_session,
+            user=user,
+            message_id=validated_data['message_id'],
+            text=validated_data['text'],
+            sender=validated_data['sender'],
+            displayed_text=validated_data.get('displayed_text', validated_data['text']),
+            is_typing=validated_data.get('is_typing', False),
+            agent_data=validated_data.get('agent_data')
+        )
+        
+        return message
 
 
 class QuerySerializer(serializers.Serializer):

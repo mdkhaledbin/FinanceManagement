@@ -3,7 +3,7 @@ import { useTheme } from "@/context/ThemeProvider";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import { ChatMessage, defaultChatMessages } from "@/data/ChatMessages";
-import { handleChatOperation } from "@/api/ChatApiReal";
+import { handleChatOperation, chatApi } from "@/api/ChatApiReal";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
 import { useTablesContent } from "@/context/DataProviderReal";
 import SpeechRecognition, {
@@ -39,17 +39,19 @@ const ChatArea = () => {
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
-  // useEffect(() => {
-  //   // Load chat history on mount
-  //   (async () => {
-  //     try {
-  //       const history = await loadChatHistory();
-  //       setMessages(history);
-  //     } catch (error) {
-  //       console.error("Error loading chat history:", error);
-  //     }
-  //   })();
-  // }, []);
+  useEffect(() => {
+    // Load chat history on mount
+    (async () => {
+      try {
+        const response = await chatApi.loadChatHistory();
+        if (response.success && response.data) {
+          setMessages(response.data);
+        }
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    })();
+  }, []);
 
   const isAuthenticated = () => {
     return !!localStorage.getItem("user");
@@ -146,6 +148,20 @@ const ChatArea = () => {
       typingIntervalRef.current = null;
     }
 
+    // Set initial state
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) => {
+        if (msg.id === messageId) {
+          return {
+            ...msg,
+            displayedText: "",
+            isTyping: true,
+          };
+        }
+        return msg;
+      })
+    );
+
     typingIntervalRef.current = setInterval(() => {
       setMessages((prevMessages) =>
         prevMessages.map((msg) => {
@@ -203,7 +219,7 @@ const ChatArea = () => {
     setInputRows(1);
     setIsLoading(true);
 
-    // Add loading bot message
+    // Add loading message
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       text: "🤔 Thinking...",
@@ -223,35 +239,48 @@ const ChatArea = () => {
         refreshData
       );
 
-      // Remove loading message and add actual response
-      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
-      setMessages((prev) => [...prev, botMessage]);
+      if (!botMessage) {
+        throw new Error("No response received from the bot");
+      }
+
+      // Remove loading message and add bot message
+      setMessages((prev) => {
+        const filteredMessages = prev.filter(
+          (msg) => msg.id !== loadingMessage.id
+        );
+        return [...filteredMessages, botMessage];
+      });
 
       // Start typing effect
-      setTimeout(() => {
-        startTypingEffect(botMessage.id, botMessage.text);
-      }, 300);
-    } catch {
+      startTypingEffect(botMessage.id, botMessage.text);
+    } catch (error) {
+      console.error("Error in handleSendMessage:", error);
       // Remove loading message and show error
-      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id));
-
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 3).toString(),
-        text: "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
-        sender: "bot",
-        timestamp: new Date(),
-        displayedText:
-          "Sorry, I encountered an error while processing your request. Please make sure you're logged in and try again.",
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const filteredMessages = prev.filter(
+          (msg) => msg.id !== loadingMessage.id
+        );
+        const errorMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: "Sorry, I encountered an error while processing your request. Please try again.",
+          sender: "bot",
+          timestamp: new Date(),
+          displayedText:
+            "Sorry, I encountered an error while processing your request. Please try again.",
+        };
+        return [...filteredMessages, errorMessage];
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatTime = (date: Date | string) => {
+    const dateObj = typeof date === "string" ? new Date(date) : date;
+    return dateObj.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   // Update input value when transcript changes
@@ -349,17 +378,52 @@ const ChatArea = () => {
                 AI Finance Assistant
               </h2>
             </div>
-            {selectedTable && (
-              <div
-                className={`text-xs px-3 py-1 rounded-full font-medium ${
+            <div className="flex items-center space-x-2">
+              {selectedTable && (
+                <div
+                  className={`text-xs px-3 py-1 rounded-full font-medium ${
+                    theme === "dark"
+                      ? "bg-blue-900/60 text-blue-100 border border-blue-800"
+                      : "bg-blue-100 text-blue-800 border border-blue-200"
+                  }`}
+                >
+                  Context: Table {selectedTable}
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to clear the chat history?"
+                    )
+                  ) {
+                    const response = await chatApi.clearChatHistory();
+                    if (response.success) {
+                      setMessages(defaultChatMessages);
+                    }
+                  }
+                }}
+                className={`p-2 rounded-lg transition-colors duration-500 ease-in-out ${
                   theme === "dark"
-                    ? "bg-blue-900/60 text-blue-100 border border-blue-800"
-                    : "bg-blue-100 text-blue-800 border border-blue-200"
+                    ? "bg-gray-700/80 hover:bg-gray-600 text-gray-200"
+                    : "bg-gray-100/80 hover:bg-gray-200 text-gray-700"
                 }`}
+                aria-label="Clear chat history"
               >
-                Context: Table {selectedTable}
-              </div>
-            )}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
           {!isAuthenticated() && (
             <div

@@ -201,7 +201,10 @@ class AgentStreamingAPIView(APIView):
             # Run agent and get response
             response_obj = async_to_sync(self._run_agent)(query_data)
             
-            return Response(response_obj, status=status.HTTP_200_OK)
+            # Process and clean the response
+            cleaned_response = self._clean_response(response_obj)
+            
+            return Response(cleaned_response, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -469,6 +472,23 @@ class SaveSessionMessageView(APIView):
                               status=status.HTTP_401_UNAUTHORIZED)
 
             session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
+            
+            # Check if message with same ID already exists
+            message_id = request.data.get('message_id')
+            if message_id and ChatMessage.objects.filter(message_id=message_id).exists():
+                return Response({
+                    "message": "Message already exists.",
+                    "data": ChatMessageSerializer(ChatMessage.objects.get(message_id=message_id)).data
+                }, status=status.HTTP_200_OK)
+            
+            # Ensure all required fields are present
+            required_fields = ['message_id', 'text', 'sender']
+            for field in required_fields:
+                if field not in request.data:
+                    return Response({
+                        "message": "Invalid data.",
+                        "errors": {field: ["This field is required."]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
             
             serializer = ChatMessageSerializer(
                 data=request.data, 
