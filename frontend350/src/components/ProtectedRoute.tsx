@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthProvider";
+import { useUser } from "@/context/AuthProvider";
 import { useTheme } from "@/context/ThemeProvider";
 import clsx from "clsx";
 
@@ -10,15 +10,15 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { user, loading } = useUser();
   const { theme } = useTheme();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push("/Signin");
+    if (!loading && !user) {
+      router.push("/signin");
     }
-  }, [isAuthenticated, loading, router]);
+  }, [user, loading, router]);
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -50,7 +50,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   // Don't render children if not authenticated
-  if (!isAuthenticated) {
+  if (!user) {
     return null;
   }
 

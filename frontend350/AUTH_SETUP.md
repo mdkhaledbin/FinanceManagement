@@ -26,14 +26,14 @@ This document explains how to connect and use the authentication APIs in the Fin
 - Redirects unauthenticated users to sign in page
 - Shows loading state while checking authentication
 
-### 4. Updated SignIn Page (`src/app/Signin/page.tsx`)
+### 4. Updated SignIn Page (`src/app/signin/page.tsx`)
 
 - Integrated with authentication API and context
 - Real form validation and error handling
 - Success/error messaging
 - Auto-redirect after successful authentication
 
-### 5. Updated Chat Page (`src/app/Chat/page.tsx`)
+### 5. Updated Chat Page (`src/app/chat/page.tsx`)
 
 - Wrapped with ProtectedRoute component
 - Includes AuthProvider in context hierarchy
@@ -48,10 +48,10 @@ This document explains how to connect and use the authentication APIs in the Fin
 
 ### Sign In Flow
 
-1. User enters email/password on `/Signin` page
+1. User enters email/password on `/signin` page
 2. Form calls `signIn()` from AuthProvider
 3. AuthProvider calls `authApi.signIn()`
-4. On success: user data stored in localStorage, redirected to `/Chat`
+4. On success: user data stored in localStorage, redirected to `/chat`
 5. On error: error message displayed to user
 
 ### Sign Up Flow
@@ -59,15 +59,15 @@ This document explains how to connect and use the authentication APIs in the Fin
 1. User toggles to sign up mode and enters name/email/password
 2. Form calls `signUp()` from AuthProvider
 3. AuthProvider calls `authApi.signUp()`
-4. On success: user automatically signed in and redirected to `/Chat`
+4. On success: user automatically signed in and redirected to `/chat`
 5. On error: error message displayed to user
 
 ### Protected Routes
 
-1. User tries to access `/Chat` page
+1. User tries to access `/chat` page
 2. ProtectedRoute component checks authentication status
 3. If authenticated: renders page content
-4. If not authenticated: redirects to `/Signin`
+4. If not authenticated: redirects to `/signin`
 
 ### Token Management
 

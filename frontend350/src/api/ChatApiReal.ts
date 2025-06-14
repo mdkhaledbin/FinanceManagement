@@ -185,10 +185,13 @@ export const chatApi = {
     tableId?: string
   ): Promise<ApiResponse<ChatMessage>> {
     try {
+      console.log("API Base URL:", API_BASE_URL); // Debug log
       // First get or create a chat session
       const sessionsResponse = await apiRequest<{
         data: { session_id: string }[];
       }>("/agent/chat/sessions/", "GET");
+
+      console.log("Sessions Response:", sessionsResponse); // Debug log
 
       let sessionId: string;
       if (!sessionsResponse.success || !sessionsResponse.data?.data?.length) {
@@ -443,6 +446,10 @@ export const handleChatOperation = async (
 
     const botMessage = response.data;
     console.log("Bot Message:", botMessage); // Debug log
+
+    if (!botMessage) {
+      throw new Error("No response data received");
+    }
 
     // Refresh data if callback is provided
     if (refreshData) {
