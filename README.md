@@ -582,3 +582,24 @@ This project represents cutting-edge integration of voice interfaces, Model Cont
 ---
 
 _This README was last updated on June 14, 2025, showcasing the latest voice chat and Model Context Protocol integrations._
+
+## ⚡ Quick Start
+
+1. Clone the repo: `git clone https://github.com/MehediHasan-75 FinanceManagement.git`
+2. Backend: `cd expense_backend && pip install -r requirements.txt && python manage.py runserver`
+3. Frontend: `cd frontend350 && npm install && npm run dev`
+4. Visit: `http://localhost:3000`
+
+## 🔧 Troubleshooting
+
+### Voice Input Not Working
+
+- Ensure you're using Chrome or Edge browser
+- Allow microphone permissions
+- Check console for errors (F12)
+
+### Common Issues
+
+- Port conflicts: Change ports in .env files
+- Database errors: Run migrations again
+- API errors: Verify backend is running
