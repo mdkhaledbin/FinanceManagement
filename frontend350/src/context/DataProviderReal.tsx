@@ -2,9 +2,18 @@ import { jsonTableApi } from "@/api/TableContentApi";
 import { tableApi } from "@/api/TableDataApi";
 import { TableDataType } from "@/data/table";
 import { JsonTableItem } from "@/data/TableContent";
-import { JsonTableAction, jsonTableReducer } from "@/reducers/TableContentReducer";
+import {
+  JsonTableAction,
+  jsonTableReducer,
+} from "@/reducers/TableContentReducer";
 import { TableReducer, TableDataAction } from "@/reducers/TableReducer";
-import { ReactNode, useReducer, createContext, useContext, useEffect } from "react";
+import {
+  ReactNode,
+  useReducer,
+  createContext,
+  useContext,
+  useEffect,
+} from "react";
 
 interface TablesDataContextType {
   tablesData: TableDataType[];
@@ -14,42 +23,51 @@ interface TablesDataContextType {
 
 const initialTablesData: TableDataType[] = [];
 
-export const TablesDataContext = createContext<TablesDataContextType | null>(null);
+export const TablesDataContext = createContext<TablesDataContextType | null>(
+  null
+);
 
 interface TablesContentContextType {
   tablesContent: JsonTableItem[];
   dispatchtablesContent: React.Dispatch<JsonTableAction>;
   getTableContents: (tableId: number | null) => JsonTableItem[];
+  refreshData: () => Promise<void>;
 }
 
 const initialTablesContent: JsonTableItem[] = [];
 
-export const TablesContentContext = createContext<TablesContentContextType | null>(null);
+export const TablesContentContext =
+  createContext<TablesContentContextType | null>(null);
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-  const [tablesData, dispatchTablesData] = useReducer(TableReducer, initialTablesData);
-  const [tablesContent, dispatchtablesContent] = useReducer(jsonTableReducer, initialTablesContent);
+  const [tablesData, dispatchTablesData] = useReducer(
+    TableReducer,
+    initialTablesData
+  );
+  const [tablesContent, dispatchtablesContent] = useReducer(
+    jsonTableReducer,
+    initialTablesContent
+  );
+
+  const refreshData = async () => {
+    // Fetch table contents
+    const contentResponse = await jsonTableApi.getTables();
+    if (contentResponse.success && contentResponse.data) {
+      dispatchtablesContent({
+        type: "SET_TABLES",
+        payload: contentResponse.data,
+      });
+    }
+
+    // Fetch table data
+    const dataResponse = await tableApi.getTables();
+    if (dataResponse.success && dataResponse.data) {
+      dispatchTablesData({ type: "SET_TABLES", payload: dataResponse.data });
+    }
+  };
 
   useEffect(() => {
-    const fetchTablesContent = async () => {
-      const response = await jsonTableApi.getTables();
-      if (response.success && response.data) {
-        dispatchtablesContent({ type: "SET_TABLES", payload: response.data });
-      }
-    };
-
-    fetchTablesContent();
-  }, []);
-
-  useEffect(() => {
-    const fetchTablesData = async () => {
-      const response = await tableApi.getTables();
-      if (response.success && response.data) {
-        dispatchTablesData({ type: "SET_TABLES", payload: response.data });
-      }
-    };
-
-    fetchTablesData();
+    refreshData();
   }, []);
 
   const getTableContents = (tableId: number | null) => {
@@ -63,9 +81,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <TablesDataContext.Provider value={{ tablesData, getTableData, dispatchTablesData }}>
+    <TablesDataContext.Provider
+      value={{ tablesData, getTableData, dispatchTablesData }}
+    >
       <TablesContentContext.Provider
-        value={{ tablesContent, dispatchtablesContent, getTableContents }}
+        value={{
+          tablesContent,
+          dispatchtablesContent,
+          getTableContents,
+          refreshData,
+        }}
       >
         {children}
       </TablesContentContext.Provider>

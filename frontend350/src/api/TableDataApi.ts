@@ -1,9 +1,16 @@
 // src/api/tableApi.ts
-import { tokenUtils } from "./AuthApi";
+import { TableDataType } from "@/data/table";
+import { TableDataAction } from "@/reducers/TableReducer";
+import axios, {
+  AxiosResponse,
+  AxiosError,
+  AxiosRequestConfig,
+  RawAxiosRequestHeaders,
+} from "axios";
+import { getCSRFToken } from "@/utils/csrf";
+import { TableRow, TableData } from "@/data/TableContent";
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
-).replace(/\/$/, ""); // Remove trailing slash to avoid double slashes
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface ApiResponse<T> {
   success: boolean;
@@ -11,23 +18,128 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-interface TableDataType {
-  id: number;
-  table_name: string;
-  description: string;
-}
-
 interface AddTableDataType {
-  table_name: string;
-  description: string;
-}
-
-interface UpdateTableRequest {
   id: number;
   table_name: string;
+  description: string;
+  headers?: string[];
 }
 
-// API request helper with JWT authentication
+interface TableContentResponse {
+  id: number;
+  data: TableData;
+}
+
+interface RowResponse {
+  id: number;
+  data: TableRow;
+}
+
+interface EditTablePayload {
+  id: number;
+  table_name: string;
+  description?: string;
+}
+
+interface ShareTablePayload {
+  table_id: number;
+  friend_ids: number[];
+  action: "share" | "unshare";
+}
+
+// Create axios instance with base configuration
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Add token refresh functionality
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
+
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If access token expired and it's the first retry
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => apiClient(originalRequest))
+          .catch((err) => Promise.reject(err));
+      }
+
+      isRefreshing = true;
+
+      try {
+        // Refresh the token
+        await apiClient.get("/auth/updateAcessToken/");
+        processQueue(null);
+        return apiClient(originalRequest); // Retry original request
+      } catch (refreshError) {
+        const error =
+          refreshError instanceof Error
+            ? refreshError
+            : new Error(String(refreshError));
+        processQueue(error, null);
+
+        if (typeof window !== "undefined") {
+          window.location.href = "/signin";
+        }
+
+        return Promise.reject(error);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Add CSRF token to requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const csrfSafeMethod = /^(GET|HEAD|OPTIONS|TRACE)$/i;
+
+    if (!csrfSafeMethod.test(config.method || "")) {
+      const token = getCSRFToken();
+      if (token) {
+        config.headers["X-CSRFToken"] = token;
+      }
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Helper function for API requests
 const apiRequest = async <T>(
   endpoint: string,
   method: string,
@@ -35,63 +147,53 @@ const apiRequest = async <T>(
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
   try {
-    // Get JWT token for authentication
-    const token = tokenUtils.getToken();
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const config: AxiosRequestConfig = {
+      url: endpoint,
       method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include", // Include cookies for JWT
-    });
+      data: body,
+      headers: headers
+        ? ({
+            ...apiClient.defaults.headers.common,
+            ...headers,
+          } as RawAxiosRequestHeaders)
+        : (apiClient.defaults.headers.common as RawAxiosRequestHeaders),
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    const response: AxiosResponse<T> = await apiClient.request(config);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    if (axiosError.response) {
       return {
         success: false,
         error:
-          errorData.message ||
-          errorData.error ||
-          `HTTP error! status: ${response.status}`,
+          (axiosError.response.data as { message?: string })?.message ||
+          `HTTP error! status: ${axiosError.response.status}`,
+      };
+    } else if (axiosError.request) {
+      return {
+        success: false,
+        error: "No response received from server",
+      };
+    } else {
+      return {
+        success: false,
+        error: axiosError.message || "An unknown error occurred",
       };
     }
-
-    const data = await response.json();
-
-    // Handle different response formats from backend
-    if (data.success !== undefined) {
-      return { success: data.success, data: data.data, error: data.error };
-    }
-
-    // Handle Django response format: { message: "...", data: [...] }
-    if (data.message && data.data !== undefined) {
-      return { success: true, data: data.data };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "An unknown error occurred",
-    };
   }
 };
 
 // Table API Service
 export const tableApi = {
-  // Get all tables - JWT authenticated
+  // Get all tables
   async getTables(): Promise<ApiResponse<TableDataType[]>> {
     return apiRequest<TableDataType[]>("/main/tables/", "GET");
   },
 
-  // Add a new table - JWT authenticated
+  // Add a new table
   async addTable(
-    tableData: AddTableDataType
+    tableData: Omit<AddTableDataType, "id">
   ): Promise<ApiResponse<TableDataType>> {
     return apiRequest<TableDataType>(
       "/main/create-tableContent/",
@@ -100,168 +202,148 @@ export const tableApi = {
     );
   },
 
-  // Update a table - JWT authenticated
-  async updateTable(
-    updateData: UpdateTableRequest
+  // Edit a table
+  async editTable(
+    id: number,
+    updateData: { table_name: string; description?: string }
   ): Promise<ApiResponse<TableDataType>> {
-    return apiRequest<TableDataType>("/main/upadate-table/", "PUT", {
-      id: updateData.id,
-      table_name: updateData.table_name,
+    return apiRequest<TableDataType>("/main/tables/update/", "PUT", {
+      id,
+      ...updateData,
     });
   },
 
-  // Delete a table - JWT authenticated
-  async deleteTable(id: number): Promise<ApiResponse<{ message: string }>> {
-    return apiRequest<{ message: string }>(`/main/tables/${id}/`, "DELETE");
+  // Delete a table
+  async deleteTable(id: number): Promise<ApiResponse<{ success: boolean }>> {
+    return apiRequest<{ success: boolean }>(`/main/tables/${id}/`, "DELETE");
   },
 
-  // Share a table - JWT authenticated
+  // Get table content
+  async getTableContent(): Promise<ApiResponse<TableContentResponse[]>> {
+    return apiRequest<TableContentResponse[]>("/main/table-contents/", "GET");
+  },
+
+  // Add a row to a table
+  async addRow(
+    tableId: number,
+    row: TableRow
+  ): Promise<ApiResponse<RowResponse>> {
+    return apiRequest<RowResponse>("/main/add-row/", "POST", {
+      tableId,
+      row,
+    });
+  },
+
+  // Update a row
+  async updateRow(
+    tableId: number,
+    rowId: number | string,
+    newRowData: Partial<TableRow>
+  ): Promise<ApiResponse<RowResponse>> {
+    return apiRequest<RowResponse>("/main/update-row/", "PATCH", {
+      tableId,
+      rowId,
+      newRowData,
+    });
+  },
+
+  // Delete a row
+  async deleteRow(
+    tableId: number,
+    rowId: number | string
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    return apiRequest<{ success: boolean }>("/main/delete-row/", "POST", {
+      tableId,
+      rowId,
+    });
+  },
+
+  // Add a column
+  async addColumn(
+    tableId: number,
+    header: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>("/main/add-column/", "POST", {
+      tableId,
+      header,
+    });
+  },
+
+  // Delete a column
+  async deleteColumn(
+    tableId: number,
+    header: string
+  ): Promise<ApiResponse<TableData>> {
+    return apiRequest<TableData>("/main/delete-column/", "POST", {
+      tableId,
+      header,
+    });
+  },
+
+  // Share a table with friends
   async shareTable(
-    id: number,
-    shareData?: { userIds: string[]; permission: string }
+    payload: ShareTablePayload
   ): Promise<ApiResponse<{ success: boolean }>> {
     return apiRequest<{ success: boolean }>(
-      `/main/tables/${id}/share/`,
+      "/main/share-table/",
       "POST",
-      shareData
+      payload
     );
   },
 };
 
-// Updated action types to match new API
-export type TableDataAction =
-  | { type: "GET_TABLES" }
-  | { type: "ADD_TABLE"; payload: AddTableDataType }
-  | { type: "UPDATE_TABLE"; payload: UpdateTableRequest }
-  | { type: "DELETE_TABLE"; payload: { id: number } }
-  | {
-      type: "SHARE_TABLE";
-      payload: { id: number; userIds?: string[]; permission?: string };
-    }
-  // Add SET_TABLES for proper state management
-  | { type: "SET_TABLES"; payload: TableDataType[] }
-  | { type: "EDIT"; payload: { id: number; table_name: string } }
-  | { type: "DELETE"; payload: { id: number } }
-  | { type: "SHARE"; payload: { id: number } };
-
 // Utility function to handle API calls and dispatch actions
 export const handleTableOperation = async (
   action: TableDataAction,
-  dispatch: React.Dispatch<any>, // You can type this better based on your reducer
-  onSuccess?: (data?: any) => void,
-  onError?: (error: string) => void
+  dispatch: React.Dispatch<TableDataAction>
 ) => {
   try {
     switch (action.type) {
-      case "GET_TABLES": {
-        const response = await tableApi.getTables();
-
-        if (response.success && response.data) {
-          dispatch({
-            type: "SET_TABLES",
-            payload: response.data,
-          });
-          onSuccess?.(response.data);
-        } else {
-          throw new Error(response.error || "Failed to fetch tables");
-        }
-        break;
-      }
-
       case "ADD_TABLE": {
         const response = await tableApi.addTable(action.payload);
 
-        if (response.success && response.data) {
-          dispatch({
-            type: "ADD_TABLE",
-            payload: response.data,
-          });
-          onSuccess?.(response.data);
-        } else {
-          throw new Error(response.error || "Failed to add table");
-        }
+        if (response.error) throw new Error(response.error);
+
+        dispatch({
+          type: "ADD_TABLE",
+          payload: {
+            id: response.data?.id ?? action.payload.id,
+            table_name: response.data?.table_name ?? action.payload.table_name,
+            description:
+              response.data?.description ?? action.payload.description,
+            headers: response.data?.headers ?? action.payload.headers,
+          },
+        });
         break;
       }
 
-      case "UPDATE_TABLE":
       case "EDIT": {
-        const payload =
-          action.type === "EDIT"
-            ? { id: action.payload.id, table_name: action.payload.table_name }
-            : action.payload;
+        const payload = action.payload as EditTablePayload;
+        const response = await tableApi.editTable(payload.id, {
+          table_name: payload.table_name,
+          description: payload.description,
+        });
 
-        const response = await tableApi.updateTable(payload);
+        if (response.error) throw new Error(response.error);
 
-        if (response.success && response.data) {
-          dispatch({
-            type: "EDIT",
-            payload: { id: payload.id, table_name: payload.table_name },
-          });
-          onSuccess?.(response.data);
-        } else {
-          throw new Error(response.error || "Failed to update table");
-        }
+        dispatch(action);
         break;
       }
 
-      case "DELETE_TABLE":
       case "DELETE": {
-        const tableId =
-          action.type === "DELETE" ? action.payload.id : action.payload.id;
-        const response = await tableApi.deleteTable(tableId);
+        const response = await tableApi.deleteTable(action.payload.id);
 
-        if (response.success) {
-          dispatch({
-            type: "DELETE",
-            payload: { id: tableId },
-          });
-          onSuccess?.(response.data?.message || "Table deleted successfully");
-        } else {
-          throw new Error(response.error || "Failed to delete table");
-        }
-        break;
-      }
+        if (response.error) throw new Error(response.error);
 
-      case "SHARE_TABLE":
-      case "SHARE": {
-        const tableId =
-          action.type === "SHARE" ? action.payload.id : action.payload.id;
-        const { userIds, permission } =
-          action.type === "SHARE_TABLE"
-            ? action.payload
-            : { userIds: undefined, permission: undefined };
-        const shareData =
-          userIds && permission ? { userIds, permission } : undefined;
-        const response = await tableApi.shareTable(tableId, shareData);
-
-        if (response.success) {
-          console.log("Table shared successfully!");
-          dispatch({
-            type: "SHARE",
-            payload: { id: tableId },
-          });
-          onSuccess?.();
-        } else {
-          throw new Error(response.error || "Failed to share table");
-        }
+        dispatch(action);
         break;
       }
 
       default:
-        throw new Error("Unknown action type");
+        break;
     }
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Operation failed";
-    console.error("Table operation failed:", errorMessage);
-    onError?.(errorMessage);
+    console.error("Table operation failed:", error);
+    // Consider dispatching an error action
   }
-};
-
-// Export types
-export type {
-  TableDataType,
-  AddTableDataType,
-  UpdateTableRequest,
-  ApiResponse,
 };

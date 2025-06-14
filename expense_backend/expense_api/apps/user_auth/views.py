@@ -7,17 +7,41 @@ from .authentication import IsAuthenticatedCustom, decode_refresh_token, generat
 from .permission import JWTAuthentication
 from .serializers import UserSerializer, userRegisterSerializer
 from django.contrib.auth.models import User
+from .models import UserProfile
 
 # Create your views here.
+
 class UserRegisterView(APIView):
     def post(self, request):
-        serializer = userRegisterSerializer(data= request.data)
+        serializer = userRegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': "User registerd successfully.",
-                             'user': serializer.data
-                             })
-        return Response(serializer.errors)
+            user = serializer.save()
+            access_token = generate_access_token(user)
+            refresh_token = generate_refresh_token(user)
+
+            response = Response({
+                'message': "User registered successfully.",
+                'user': UserSerializer(user).data,
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            })
+
+            # response.set_cookie('refresh_token', refresh_token, httponly=True)
+            # response.set_cookie('access_token', access_token, httponly=True)
+            response.set_cookie(
+                'refresh_token', refresh_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=7*24*60*60  # <-- Important
+            )
+            response.set_cookie(
+                'access_token', access_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
+            
+            return response
+
+        return Response(serializer.errors, status=400)
     
     
 class UserListView(APIView):
@@ -47,8 +71,18 @@ class loginView(APIView):
                                 'access_token': generate_access_token(user),
                                 'refresh_token': generate_refresh_token(user)
                              })
-            response.set_cookie('refresh_token', generate_refresh_token(user), httponly=True)
-            response.set_cookie('access_token', generate_access_token(user), httponly=True)
+            # response.set_cookie('refresh_token', generate_refresh_token(user), httponly=True)
+            # response.set_cookie('access_token', generate_access_token(user), httponly=True)
+            response.set_cookie(
+                'refresh_token', generate_refresh_token(user),
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=7*24*60*60  # <-- Important
+            )
+            response.set_cookie(
+                'access_token', generate_access_token(user),
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
             return response
         return Response({'message': "Invalid credentials."})
     
@@ -145,10 +179,173 @@ class UdateAccessToken(APIView):
                 'access_token': access_token
             })
 
-            response.set_cookie('access_token', access_token, httponly=True)
+            response.set_cookie(
+                'access_token', access_token,
+                httponly=True, path='/', samesite='Lax',
+                secure=False, max_age=60*60  # <-- 15 minutes
+            )
             return response
 
         except User.DoesNotExist:
             return Response({'message': "User not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'message': "Invalid refresh token.", 'error': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        
+class MeView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            serializer = UserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to retrieve user info",
+                    "details": str(e),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )       
+
+class UpdateUserProfile(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        # Get the authenticated user
+        user = request.user
+
+        # Verify password
+        auth_user = authenticate(username=user.username, password=password)
+        if not auth_user:
+            return Response({"message": "Authentication failed"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Check if email or username is provided
+        if not email and not username:
+            return Response({"message": "Email or username is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if email is already taken by another user
+        if email and email != user.email:
+            if User.objects.filter(email=email).exists():
+                return Response({"message": "Email is already taken"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if username is already taken by another user
+        if username and username != user.username:
+            if User.objects.filter(username=username).exists():
+                return Response({"message": "Username is already taken"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update profile
+        if email:
+            user.email = email
+        if username:
+            user.username = username
+        user.save()
+
+        return Response({
+            "message": "Profile updated successfully",
+            "user": UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+class FriendsListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Check if user has a profile, if not create one
+            if not hasattr(user, 'profile'):
+                UserProfile.objects.create(user=user)
+                user.refresh_from_db()  # Refresh user object to get the new profile
+            
+            # Get friends from both directions
+            user_friends = user.profile.friends.all()
+            friends_who_added_me = User.objects.filter(profile__friends=user)
+            
+            # Combine both querysets and remove duplicates
+            all_friends = user_friends.union(friends_who_added_me)
+            
+            serializer = UserSerializer(all_friends, many=True)
+            return Response({
+                "message": "Friends list fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error in FriendsListView: {str(e)}")  # Add logging
+            return Response({
+                "error": "Failed to fetch friends list",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ManageFriendView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def post(self, request):
+        try:
+            friend_id = request.data.get('friend_id')
+            action = request.data.get('action')  # 'add' or 'remove'
+
+            if not friend_id or not action:
+                return Response({
+                    "error": "friend_id and action are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                friend = User.objects.get(id=friend_id)
+            except User.DoesNotExist:
+                return Response({
+                    "error": "Friend not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            user = request.user
+            
+            # Check if user has a profile, if not create one
+            if not hasattr(user, 'profile'):
+                UserProfile.objects.create(user=user)
+                user.refresh_from_db()  # Refresh user object to get the new profile
+                
+            # Check if friend has a profile, if not create one
+            if not hasattr(friend, 'profile'):
+                UserProfile.objects.create(user=friend)
+                friend.refresh_from_db()  # Refresh friend object to get the new profile
+
+            if action == 'add':
+                if friend in user.profile.friends.all():
+                    return Response({
+                        "error": "User is already your friend"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                user.profile.friends.add(friend)
+                message = "Friend added successfully"
+            elif action == 'remove':
+                if friend not in user.profile.friends.all():
+                    return Response({
+                        "error": "User is not your friend"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                user.profile.friends.remove(friend)
+                message = "Friend removed successfully"
+            else:
+                return Response({
+                    "error": "Invalid action. Use 'add' or 'remove'"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                "message": message
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error in ManageFriendView: {str(e)}")  # Add logging
+            return Response({
+                "error": "Failed to manage friend",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        

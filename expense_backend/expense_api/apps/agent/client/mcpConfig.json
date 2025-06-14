@@ -2,9 +2,7 @@
   "mcpServers": {
     "finance_server": {
       "command": "python",
-      "args": [
-        "/home/mehedi/03_Projects/FinanceManagement/expense_backend/expense_api/apps/agent/servers/finance_mcp_server.py"
-      ]
+      "args": ["{SERVER_SCRIPT_PATH}"]
     }
   }
 }

@@ -1,134 +1,127 @@
+// context/UserContext.tsx
 "use client";
-import {
+import React, {
   createContext,
-  useContext,
   useState,
   useEffect,
+  useContext,
   ReactNode,
+  useCallback,
 } from "react";
-import { authApi, tokenUtils, AuthUser } from "@/api/AuthApi";
+import { getSelfDetail, updateAccessToken, logoutUser } from "@/api/AuthApi";
+import { useRouter } from "next/navigation";
 
-interface AuthContextType {
-  user: AuthUser | null;
-  loading: boolean;
-  signIn: (
-    username: string,
-    password: string
-  ) => Promise<{ success: boolean; error?: string }>;
-  signUp: (
-    username: string,
-    email: string,
-    password: string,
-    password2: string
-  ) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => void;
-  isAuthenticated: boolean;
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  name?: string;
+  // Add other user fields as needed
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export interface UserContextType {
+  user: User | null;
+  setUser: (user: User | null) => void;
+  refreshUser: () => Promise<void>;
+  loading: boolean;
+  signOut: () => Promise<void>;
+}
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+export const UserContext = createContext<UserContextType | undefined>(
+  undefined
+);
+
+const TOKEN_REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes in milliseconds
+
+export const UserProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // Check for existing authentication on mount
-  useEffect(() => {
-    const token = tokenUtils.getToken();
-    const userData = tokenUtils.getUser();
-
-    if (token && userData) {
-      setUser({
-        ...userData,
-        token,
-      });
-    }
-
-    setLoading(false);
-  }, []);
-
-  const signIn = async (username: string, password: string) => {
-    setLoading(true);
-    try {
-      const response = await authApi.signIn({ username, password });
-
-      if (response.success && response.data) {
-        setUser(response.data);
-        tokenUtils.storeAuth(response.data);
-        return { success: true };
-      } else {
-        return { success: false, error: response.error || "Sign in failed" };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred",
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signUp = async (
-    username: string,
-    email: string,
-    password: string,
-    password2: string
-  ) => {
-    setLoading(true);
-    try {
-      const response = await authApi.signUp({
-        username,
-        email,
-        password,
-        password2,
-      });
-
-      if (response.success && response.data) {
-        setUser(response.data);
-        tokenUtils.storeAuth(response.data);
-        return { success: true };
-      } else {
-        return { success: false, error: response.error || "Sign up failed" };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred",
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signOut = () => {
+  const handleTokenExpiration = useCallback(() => {
+    // Remove all user-related data from localStorage
+    localStorage.removeItem("user");
+    localStorage.removeItem("user_data");
     setUser(null);
-    tokenUtils.clearAuth();
-  };
+    router.push("/signin");
+  }, [router]);
 
-  const isAuthenticated = !!user;
+  const refreshUser = useCallback(async () => {
+    const existingUser = localStorage.getItem("user");
+    if (!existingUser && window.location.pathname !== "/signin") {
+      setLoading(false);
+      return;
+    }
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    isAuthenticated,
-  };
+    try {
+      const userData = await getSelfDetail();
+      if (userData.success && userData.data) {
+        localStorage.setItem("user", JSON.stringify(userData.data));
+        setUser(userData.data);
+      } else {
+        throw new Error("User data is invalid");
+      }
+    } catch (error) {
+      console.error("Failed to get user info:", error);
+      handleTokenExpiration();
+    } finally {
+      setLoading(false);
+    }
+  }, [handleTokenExpiration]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const refreshToken = useCallback(async () => {
+    try {
+      const response = await updateAccessToken();
+      if (!response.success) {
+        throw new Error("Failed to refresh token");
+      }
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      handleTokenExpiration();
+    }
+  }, [handleTokenExpiration]);
+
+  const signOut = useCallback(async () => {
+    try {
+      const response = await logoutUser();
+      if (!response.success) {
+        throw new Error(response.error || "Logout failed");
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      // Always clear user data and redirect, even if the API call fails
+      handleTokenExpiration();
+    }
+  }, [handleTokenExpiration]);
+
+  // Initial user data fetch
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
+  // Periodic token refresh
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshToken();
+    }, TOKEN_REFRESH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [refreshToken]);
+
+  return (
+    <UserContext.Provider
+      value={{ user, setUser, refreshUser, loading, signOut }}
+    >
+      {children}
+    </UserContext.Provider>
+  );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+export const useUser = (): UserContextType => {
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUser must be used within a UserProvider");
   }
   return context;
 };

@@ -30,7 +30,7 @@ const CTA = () => {
           FinBot. Sign up now and experience the future of personal finance.
         </p>
         <a
-          href="/Chat/"
+          href="/chat/"
           className={clsx(
             "px-10 py-4 rounded-lg transition-colors font-semibold text-xl shadow-md hover:shadow-lg",
             theme === "dark"

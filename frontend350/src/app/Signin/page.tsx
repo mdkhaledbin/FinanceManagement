@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -13,26 +13,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { SunIcon, MoonIcon, AlertCircle } from "lucide-react";
-import { ThemeProvider, useTheme } from "@/context/ThemeProvider";
-import { AuthProvider, useAuth } from "@/context/AuthProvider";
-import { authApi } from "@/api/AuthApi";
+import { SunIcon, MoonIcon, HomeIcon } from "lucide-react";
+import { useTheme } from "@/context/ThemeProvider";
 import clsx from "clsx";
-import { DataProvider } from "@/context/DataProvider";
-import { SelectedTableProvider } from "@/context/SelectedTableProvider";
+import { registerUser, loginUser } from "../../api/AuthApi";
+import { useUser } from "@/context/AuthProvider";
+import { motion } from "framer-motion";
 
-const SignInForm = () => {
+type FormData = {
+  username: string;
+  email: string;
+  password: string;
+  password2: string;
+  rememberMe: boolean;
+};
+
+const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
   const [error, setError] = useState("");
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     username: "",
     email: "",
     password: "",
@@ -41,15 +40,8 @@ const SignInForm = () => {
   });
 
   const { theme, toggleTheme } = useTheme();
-  const { signIn, signUp, loading, isAuthenticated } = useAuth();
   const router = useRouter();
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/Chat");
-    }
-  }, [isAuthenticated, router]);
+  const { refreshUser } = useUser();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -57,100 +49,149 @@ const SignInForm = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-    // Clear error when user starts typing
     if (error) setError("");
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const toggleAuthMode = () => {
+    setIsSignUp((prev) => !prev);
     setError("");
+    setFormData({
+      username: "",
+      email: "",
+      password: "",
+      password2: "",
+      rememberMe: false,
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
     try {
       if (isSignUp) {
-        // Sign Up
-        if (!formData.username.trim()) {
-          setError("Username is required");
-          return;
-        }
-
         if (formData.password !== formData.password2) {
           setError("Passwords do not match");
           return;
         }
 
-        const result = await signUp(
-          formData.username,
-          formData.email,
-          formData.password,
-          formData.password2
-        );
-
-        if (result.success) {
-          router.push("/Chat");
-        } else {
-          setError(result.error || "Sign up failed");
-        }
+        await registerUser({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          password2: formData.password2,
+        });
       } else {
-        // Sign In
-        const result = await signIn(formData.username, formData.password);
-
-        if (result.success) {
-          router.push("/Chat");
-        } else {
-          setError(result.error || "Sign in failed");
-        }
+        await loginUser({
+          username: formData.username,
+          password: formData.password,
+        });
       }
-    } catch (error) {
-      console.error("❌ Form submission error:", error);
-      setError("An unexpected error occurred during form submission");
+
+      await refreshUser();
+      router.push("/chat");
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        "An unexpected error occurred";
+      console.log(err);
+
+      setError(errorMessage);
     }
   };
 
-  const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError("");
+  // Enhanced gradient color scheme
+  const cardClasses = clsx(
+    "w-[90%] max-w-[500px] rounded-xl shadow-2xl transition-all duration-300 border",
+    theme === "dark"
+      ? "bg-gradient-to-br from-gray-800/90 via-gray-800/80 to-gray-900/90 border-gray-700 backdrop-blur-sm"
+      : "bg-gradient-to-br from-white/95 via-blue-50/90 to-white/95 border-gray-200/80 backdrop-blur-sm"
+  );
 
-    if (!resetEmail.trim()) {
-      setError("Email is required");
-      return;
-    }
+  const textColor = theme === "dark" ? "text-gray-100" : "text-gray-800";
+  const secondaryTextColor =
+    theme === "dark" ? "text-gray-400" : "text-gray-600";
+  const gradientText = clsx(
+    "bg-clip-text text-transparent font-bold",
+    theme === "dark"
+      ? "bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400"
+      : "bg-gradient-to-r from-blue-600 via-teal-500 to-emerald-500"
+  );
 
-    try {
-      const response = await authApi.resetPassword(resetEmail);
+  const inputClasses = clsx(
+    "transition-all duration-300",
+    theme === "dark"
+      ? "bg-gray-700/40 border-gray-600 text-white focus:border-blue-400 focus:ring-2 focus:ring-blue-500/50"
+      : "bg-white/80 border-gray-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30",
+    "placeholder-gray-500/60"
+  );
 
-      if (response.success) {
-        setResetEmailSent(true);
-        setTimeout(() => {
-          setShowForgotPassword(false);
-          setResetEmailSent(false);
-          setResetEmail("");
-        }, 3000);
-      } else {
-        setError(response.error || "Password reset failed");
-      }
-    } catch (error) {
-      setError("An unexpected error occurred");
-    }
-  };
+  const buttonClasses = clsx(
+    "w-full font-semibold py-3 rounded-lg transition-all duration-300 group",
+    theme === "dark"
+      ? "bg-gradient-to-r from-blue-600 via-teal-500 to-emerald-500 hover:from-blue-700 hover:via-teal-600 hover:to-emerald-600"
+      : "bg-gradient-to-r from-blue-500 via-teal-400 to-emerald-400 hover:from-blue-600 hover:via-teal-500 hover:to-emerald-500",
+    "text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.99]",
+    "relative overflow-hidden"
+  );
 
   return (
     <div
       className={clsx(
-        "min-h-screen flex items-center justify-center p-4 transition-colors duration-300",
+        "min-h-screen flex items-center justify-center p-4 transition-colors duration-300 relative overflow-hidden",
         theme === "dark"
-          ? "bg-gray-900"
-          : "bg-gradient-to-br from-gray-100 to-blue-50"
+          ? "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900"
+          : "bg-gradient-to-br from-gray-50 via-blue-50/70 to-gray-50"
       )}
     >
-      <div className="absolute top-4 right-4">
+      {/* Animated gradient background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 -left-20 w-96 h-96 rounded-full bg-gradient-to-r from-blue-400/20 to-emerald-400/20 blur-3xl animate-float opacity-70"></div>
+        <div className="absolute bottom-1/3 -right-20 w-96 h-96 rounded-full bg-gradient-to-r from-teal-400/20 to-blue-400/20 blur-3xl animate-float-delay opacity-70"></div>
+        <div className="absolute top-1/2 right-1/4 w-64 h-64 rounded-full bg-gradient-to-r from-emerald-400/20 to-teal-400/20 blur-3xl animate-float-delay-2 opacity-60"></div>
+      </div>
+
+      {/* Glowing orb decoration */}
+      <div className="fixed top-1/4 left-1/4 w-32 h-32 rounded-full bg-blue-500/10 blur-3xl animate-pulse-slow"></div>
+      <div className="fixed bottom-1/4 right-1/4 w-40 h-40 rounded-full bg-teal-500/10 blur-3xl animate-pulse-slow-delay"></div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="absolute top-4 left-4 z-20"
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => router.push("/")}
+          className={clsx(
+            "rounded-full backdrop-blur-sm",
+            theme === "dark"
+              ? "bg-gray-800/50 text-blue-400 border-gray-700 hover:bg-gray-700/60"
+              : "bg-white/70 text-blue-600 border-gray-300 hover:bg-gray-200/70"
+          )}
+        >
+          <HomeIcon className="h-5 w-5" />
+          <span className="sr-only">Go to Home</span>
+        </Button>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="absolute top-4 right-4 z-20"
+      >
         <Button
           variant="outline"
           size="icon"
           onClick={toggleTheme}
           className={clsx(
+            "rounded-full backdrop-blur-sm",
             theme === "dark"
-              ? "text-yellow-400 border-gray-700 hover:bg-gray-800"
-              : "text-blue-600 border-gray-300 hover:bg-gray-200"
+              ? "bg-gray-800/50 text-blue-400 border-gray-700 hover:bg-gray-700/60"
+              : "bg-white/70 text-blue-600 border-gray-300 hover:bg-gray-200/70"
           )}
         >
           {theme === "dark" ? (
@@ -160,153 +201,60 @@ const SignInForm = () => {
           )}
           <span className="sr-only">Toggle theme</span>
         </Button>
-      </div>
+      </motion.div>
 
-      <Card
-        className={clsx(
-          "w-full max-w-md rounded-2xl shadow-xl transition-colors",
-          theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white"
-        )}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="w-full flex justify-center z-10"
       >
-        <CardHeader className="text-center">
-          <CardTitle
-            className={clsx(
-              "text-3xl font-bold",
-              theme === "dark" ? "text-white" : "text-gray-800"
-            )}
-          >
-            {showForgotPassword
-              ? "Reset Password"
-              : isSignUp
-              ? "Create an Account"
-              : "Welcome Back"}
-          </CardTitle>
-
-          <CardDescription
-            className={clsx(
-              theme === "dark" ? "text-gray-400" : "text-gray-600"
-            )}
-          >
-            {showForgotPassword
-              ? "Enter your email to reset your password"
-              : isSignUp
-              ? "Join FinBot today!"
-              : "Sign in to continue to FinBot"}
-          </CardDescription>
-
-          {!showForgotPassword && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="link"
-                  className={clsx(
-                    "text-sm underline mt-2",
-                    theme === "dark" ? "text-blue-400" : "text-blue-600"
-                  )}
-                >
-                  What can FinBot do?
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="text-sm max-w-sm">
-                • Smart budget tracking
-                <br />
-                • Conversational chatbot for finance help
-                <br />
-                • Real-time analytics & personalized insights
-                <br />
-                • Cross-device sync & AI reminders
-                <br />• Military-grade data protection
-              </PopoverContent>
-            </Popover>
-          )}
-        </CardHeader>
-
-        <CardContent className="space-y-6 p-6 sm:p-8">
-          {/* Error Message */}
-          {error && (
-            <div
-              className={clsx(
-                "flex items-center gap-2 p-3 rounded-lg",
-                theme === "dark"
-                  ? "bg-red-900/20 border-red-800 text-red-300"
-                  : "bg-red-50 border-red-200 text-red-700"
-              )}
+        <Card className={cardClasses}>
+          <CardHeader className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
             >
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
+              <CardTitle
+                className={clsx("text-3xl font-bold mb-2", gradientText)}
+              >
+                {isSignUp ? "Create an Account" : "Welcome Back"}
+              </CardTitle>
+              <CardDescription className={clsx("text-sm", secondaryTextColor)}>
+                {isSignUp
+                  ? "Join FinBot today and take control of your finances"
+                  : "Sign in to continue your financial journey"}
+              </CardDescription>
+            </motion.div>
+          </CardHeader>
 
-          {showForgotPassword ? (
-            <form onSubmit={handlePasswordReset} className="space-y-5">
-              <div>
-                <Label
-                  htmlFor="reset-email"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
-                >
-                  Email
-                </Label>
-                <Input
-                  id="reset-email"
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={loading}
+          <CardContent className="space-y-6 p-6 sm:p-8">
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
                 className={clsx(
-                  "w-full font-semibold py-3 rounded-lg",
+                  "flex items-center gap-2 p-3 rounded-lg text-sm border backdrop-blur-sm",
                   theme === "dark"
-                    ? "bg-blue-500 hover:bg-blue-600 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                    ? "bg-red-900/30 text-red-300 border-red-800/50"
+                    : "bg-red-50 text-red-700 border-red-200"
                 )}
               >
-                {resetEmailSent
-                  ? "Email Sent!"
-                  : loading
-                  ? "Sending..."
-                  : "Send Reset Link"}
-              </Button>
-              <p
-                className={clsx(
-                  "text-center text-sm",
-                  theme === "dark" ? "text-gray-400" : "text-gray-600"
-                )}
+                {error}
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-1"
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForgotPassword(false);
-                    setError("");
-                  }}
-                  className={clsx(
-                    "font-semibold hover:underline",
-                    theme === "dark" ? "text-blue-400" : "text-blue-600"
-                  )}
-                >
-                  Back to Sign In
-                </button>
-              </p>
-            </form>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Username field - always show */}
-              <div>
                 <Label
                   htmlFor="username"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
+                  className={clsx("text-sm font-medium", textColor)}
                 >
                   Username
                 </Label>
@@ -317,22 +265,21 @@ const SignInForm = () => {
                   required
                   value={formData.username}
                   onChange={handleInputChange}
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
+                  className={inputClasses}
+                  placeholder="Enter your username"
                 />
-              </div>
+              </motion.div>
 
-              {/* Email field - only for signup */}
               {isSignUp && (
-                <div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-1"
+                >
                   <Label
                     htmlFor="email"
-                    className={clsx(
-                      theme === "dark" ? "text-gray-300" : "text-gray-700"
-                    )}
+                    className={clsx("text-sm font-medium", textColor)}
                   >
                     Email
                   </Label>
@@ -343,22 +290,21 @@ const SignInForm = () => {
                     required
                     value={formData.email}
                     onChange={handleInputChange}
-                    className={clsx(
-                      theme === "dark"
-                        ? "bg-gray-700 border-gray-600 text-white"
-                        : ""
-                    )}
+                    className={inputClasses}
+                    placeholder="Enter your email"
                   />
-                </div>
+                </motion.div>
               )}
 
-              {/* Password field */}
-              <div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-1"
+              >
                 <Label
                   htmlFor="password"
-                  className={clsx(
-                    theme === "dark" ? "text-gray-300" : "text-gray-700"
-                  )}
+                  className={clsx("text-sm font-medium", textColor)}
                 >
                   Password
                 </Label>
@@ -369,22 +315,21 @@ const SignInForm = () => {
                   required
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={clsx(
-                    theme === "dark"
-                      ? "bg-gray-700 border-gray-600 text-white"
-                      : ""
-                  )}
+                  className={inputClasses}
+                  placeholder="Enter your password"
                 />
-              </div>
+              </motion.div>
 
-              {/* Confirm password - only for signup */}
               {isSignUp && (
-                <div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-1"
+                >
                   <Label
                     htmlFor="password2"
-                    className={clsx(
-                      theme === "dark" ? "text-gray-300" : "text-gray-700"
-                    )}
+                    className={clsx("text-sm font-medium", textColor)}
                   >
                     Confirm Password
                   </Label>
@@ -395,134 +340,98 @@ const SignInForm = () => {
                     required
                     value={formData.password2}
                     onChange={handleInputChange}
-                    className={clsx(
-                      theme === "dark"
-                        ? "bg-gray-700 border-gray-600 text-white"
-                        : ""
-                    )}
+                    className={inputClasses}
+                    placeholder="Confirm your password"
                   />
-                </div>
+                </motion.div>
               )}
 
-              {!isSignUp && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="remember"
-                      name="rememberMe"
-                      checked={formData.rememberMe}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          rememberMe: !!checked,
-                        }))
-                      }
-                    />
-                    <Label
-                      htmlFor="remember"
-                      className={clsx(
-                        "text-sm",
-                        theme === "dark" ? "text-gray-400" : "text-gray-600"
-                      )}
-                    >
-                      Remember me
-                    </Label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForgotPassword(true);
-                      setError("");
-                    }}
-                    className={clsx(
-                      "text-sm hover:underline",
-                      theme === "dark" ? "text-blue-400" : "text-blue-600"
-                    )}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className={clsx(
-                  "w-full font-semibold py-3 rounded-lg",
-                  theme === "dark"
-                    ? "bg-blue-500 hover:bg-blue-600 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
-                )}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.8 }}
+                className="pt-2"
               >
-                {loading ? "Processing..." : isSignUp ? "Sign Up" : "Sign In"}
-              </Button>
+                <Button type="submit" className={buttonClasses}>
+                  <span className="relative z-10">
+                    {isSignUp ? "Create Account" : "Sign In"}
+                  </span>
+                  <span
+                    className={clsx(
+                      "absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-10 transition-opacity duration-300",
+                      theme === "dark"
+                        ? "from-white to-white"
+                        : "from-white to-white"
+                    )}
+                  ></span>
+                </Button>
+              </motion.div>
             </form>
-          )}
 
-          {!showForgotPassword && (
-            <p
-              className={clsx(
-                "text-center text-sm mt-6",
-                theme === "dark" ? "text-gray-400" : "text-gray-600"
-              )}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+              className={clsx("text-center text-sm", secondaryTextColor)}
             >
               {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
               <button
                 type="button"
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                  setError("");
-                  setFormData({
-                    username: "",
-                    email: "",
-                    password: "",
-                    password2: "",
-                    rememberMe: false,
-                  });
-                }}
+                onClick={toggleAuthMode}
                 className={clsx(
-                  "font-semibold hover:underline",
-                  theme === "dark" ? "text-blue-400" : "text-blue-600"
+                  "font-medium hover:underline transition-colors duration-300",
+                  theme === "dark"
+                    ? "text-blue-400 hover:text-blue-300"
+                    : "text-blue-600 hover:text-blue-500"
                 )}
               >
                 {isSignUp ? "Sign In" : "Sign Up"}
               </button>
-            </p>
-          )}
+            </motion.p>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-          {/* Demo Credentials Info */}
-          {!showForgotPassword && (
-            <div
-              className={clsx(
-                "mt-4 p-3 rounded-lg text-xs",
-                theme === "dark"
-                  ? "bg-gray-700/50 text-gray-400"
-                  : "bg-gray-50 text-gray-600"
-              )}
-            >
-              <strong>Demo Credentials:</strong>
-              <br />
-              Username: khaled
-              <br />
-              Password: Khaledd@55
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Add this to your global CSS or styles */}
+      <style jsx global>{`
+        @keyframes float {
+          0% {
+            transform: translateY(0) rotate(0deg);
+          }
+          50% {
+            transform: translateY(-20px) rotate(5deg);
+          }
+          100% {
+            transform: translateY(0) rotate(0deg);
+          }
+        }
+        @keyframes pulse-slow {
+          0%,
+          100% {
+            opacity: 0.5;
+          }
+          50% {
+            opacity: 0.8;
+          }
+        }
+        .animate-float {
+          animation: float 12s ease-in-out infinite;
+        }
+        .animate-float-delay {
+          animation: float 12s ease-in-out infinite 3s;
+        }
+        .animate-float-delay-2 {
+          animation: float 12s ease-in-out infinite 6s;
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 8s ease-in-out infinite;
+        }
+        .animate-pulse-slow-delay {
+          animation: pulse-slow 8s ease-in-out infinite 2s;
+        }
+      `}</style>
     </div>
   );
 };
 
-const SignInPage = () => (
-  <ThemeProvider>
-    <AuthProvider>
-      <DataProvider>
-        <SelectedTableProvider>
-          <SignInForm />
-        </SelectedTableProvider>
-      </DataProvider>
-    </AuthProvider>
-  </ThemeProvider>
-);
-
-export default SignInPage;
+export default AuthForm;

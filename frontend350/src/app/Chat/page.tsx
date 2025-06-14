@@ -3,46 +3,49 @@ import MainContent from "@/components/MainContent";
 import Navbar from "@/components/Navbar";
 import SideBar from "@/components/SideBarComps/SideBar";
 import ToggleChat from "@/components/ToggleChat";
-import ProtectedRoute from "@/components/ProtectedRoute";
+import { useUser } from "@/context/AuthProvider";
 import { DataProvider } from "@/context/DataProviderReal";
 import { SelectedTableProvider } from "@/context/SelectedTableProvider";
-import { ThemeProvider } from "@/context/ThemeProvider";
-import { AuthProvider } from "@/context/AuthProvider";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const ChatPageContent = () => {
+const Page = () => {
   const [showChatArea, setShowChatArea] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const router = useRouter();
+  const { user, loading } = useUser();
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && user === null) {
+      router.push("/signin");
+    }
+  }, [user, loading, router]);
+
+  if (!isClient || loading) return null;
+  if (!user) return null;
 
   const handleShowChat = () => {
     setShowChatArea(!showChatArea);
   };
 
   return (
-    <ProtectedRoute>
-      <div className="flex overflow-hidden">
-        <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-        <ToggleChat onToggle={handleShowChat} />
-        <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
-        <div className="flex-1 overflow-x-auto">
-          <MainContent showChat={showChatArea} />
+    <DataProvider>
+      <SelectedTableProvider>
+        <div className="flex overflow-hidden transition-all duration-500 ease-in-out">
+          <Navbar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+          <ToggleChat onToggle={handleShowChat} />
+          <SideBar isOpen={showSidebar} setIsOpen={setShowSidebar} />
+          <div className="flex-1 overflow-x-auto">
+            <MainContent showChat={showChatArea} />
+          </div>
         </div>
-      </div>
-    </ProtectedRoute>
-  );
-};
-
-const Page = () => {
-  return (
-    <ThemeProvider>
-      <AuthProvider>
-        <DataProvider>
-          <SelectedTableProvider>
-            <ChatPageContent />
-          </SelectedTableProvider>
-        </DataProvider>
-      </AuthProvider>
-    </ThemeProvider>
+      </SelectedTableProvider>
+    </DataProvider>
   );
 };
 

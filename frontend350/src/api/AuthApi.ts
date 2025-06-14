@@ -1,158 +1,311 @@
-// AuthApi.ts - Authentication API Service
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
-).replace(/\/$/, ""); // Remove trailing slash to avoid double slashes
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import axios, { AxiosError } from "axios";
+import { getCSRFToken } from "@/utils/csrf";
 
-// Types for authentication
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+// Set base URL for the backend
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"; // Replace with your actual backend URL
 
-interface SignInRequest {
-  username: string;
-  password: string;
-}
+// Enable credentials (cookies like access_token and refresh_token)
+const axiosInstance = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-interface SignUpRequest {
+axiosInstance.interceptors.request.use((config) => {
+  // Only add CSRF header to unsafe methods
+  const csrfSafeMethod = /^(GET|HEAD|OPTIONS|TRACE)$/i;
+
+  if (!csrfSafeMethod.test(config.method || "")) {
+    const token = getCSRFToken();
+    if (token) {
+      config.headers["X-CSRFToken"] = token;
+    }
+  }
+
+  return config;
+});
+
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If access token expired and it's the first retry
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => axiosInstance(originalRequest))
+          .catch((err) => Promise.reject(err));
+      }
+
+      isRefreshing = true;
+
+      try {
+        // Refresh the token
+        await axiosInstance.get("/auth/updateAcessToken/");
+        processQueue(null);
+        return axiosInstance(originalRequest); // Retry original request
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+
+        if (typeof window !== "undefined") {
+          window.location.href = "/signin";
+        }
+
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Interfaces
+export interface RegisterData {
   username: string;
   email: string;
   password: string;
   password2: string;
 }
 
-interface ResetPasswordRequest {
-  email: string;
+export interface LoginData {
+  username: string;
+  password: string;
 }
 
-interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  token: string;
+export interface UpdateUserPasswordData {
+  email?: string;
+  username?: string;
+  password: string;
+  newpassword: string;
+  newpassword2: string;
 }
 
-interface ResetPasswordResponse {
-  message: string;
+export interface UpdateUserProfileData {
+  email?: string;
+  username?: string;
+  password: string;
 }
 
-// API request helper
-const apiRequest = async <T>(
-  endpoint: string,
-  method: string,
-  body?: unknown,
-  headers?: Record<string, string>
-): Promise<ApiResponse<T>> => {
-  const fullUrl = `${API_BASE_URL}${endpoint}`;
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
 
+// API Calls
+export const registerUser = async (
+  data: RegisterData
+): Promise<ApiResponse<any>> => {
   try {
-    const response = await fetch(fullUrl, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return {
-        success: false,
-        error: errorData.message || `HTTP error! status: ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-    return { success: true, data };
+    const response = await axiosInstance.post("/auth/register/", data);
+    return { success: true, data: response.data };
   } catch (error) {
+    const axiosError = error as AxiosError;
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "An unknown error occurred",
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Registration failed",
     };
   }
 };
 
-// Authentication API Service
-export const authApi = {
-  // Sign in user
-  async signIn(credentials: SignInRequest): Promise<ApiResponse<AuthUser>> {
-    return apiRequest<AuthUser>("/auth/login/", "POST", credentials);
-  },
-
-  // Sign up user
-  async signUp(userData: SignUpRequest): Promise<ApiResponse<AuthUser>> {
-    return apiRequest<AuthUser>("/auth/register/", "POST", userData);
-  },
-
-  // Reset password
-  async resetPassword(
-    email: string
-  ): Promise<ApiResponse<ResetPasswordResponse>> {
-    return apiRequest<ResetPasswordResponse>("/auth/reset-password/", "POST", {
-      email,
-    });
-  },
-
-  // Sign out user (client-side token removal)
-  async signOut(): Promise<void> {
-    // Remove token from localStorage
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user_data");
-    }
-  },
+export const loginUser = async (data: LoginData): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/login/", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Login failed",
+    };
+  }
 };
 
-// Utility functions for token management
-export const tokenUtils = {
-  // Store user data and token
-  storeAuth: (user: AuthUser) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("auth_token", user.token);
-      localStorage.setItem(
-        "user_data",
-        JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        })
-      );
-    }
-  },
-
-  // Get stored token
-  getToken: (): string | null => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("auth_token");
-    }
-    return null;
-  },
-
-  // Get stored user data
-  getUser: (): { id: string; name: string; email: string } | null => {
-    if (typeof window !== "undefined") {
-      const userData = localStorage.getItem("user_data");
-      return userData ? JSON.parse(userData) : null;
-    }
-    return null;
-  },
-
-  // Check if user is authenticated
-  isAuthenticated: (): boolean => {
-    return !!tokenUtils.getToken();
-  },
-
-  // Clear stored auth data
-  clearAuth: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user_data");
-    }
-  },
+export const logoutUser = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/logout/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Logout failed",
+    };
+  }
 };
 
-export type { SignInRequest, SignUpRequest, AuthUser, ApiResponse };
+export const getUsersList = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/users-list/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch users",
+    };
+  }
+};
+
+export const getUserDetail = async (
+  userId: number
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get(`/auth/users-list/${userId}/`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch user details",
+    };
+  }
+};
+
+export const updateUserPassword = async (
+  data: UpdateUserPasswordData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/update", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update password",
+    };
+  }
+};
+
+export const updateAccessToken = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/updateAcessToken/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update access token",
+    };
+  }
+};
+
+export const getSelfDetail = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/me/");
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch user details",
+    };
+  }
+};
+
+export const updateUserProfile = async (
+  data: UpdateUserProfileData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/update-profile/", data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to update profile",
+    };
+  }
+};
+
+// Friend Management Interfaces
+export interface FriendActionData {
+  friend_id: number;
+  action: "add" | "remove";
+}
+
+// Friend Management API Calls
+export const getFriendsList = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/friends/");
+    return { 
+      success: true, 
+      data: response.data,
+      message: response.data.message 
+    };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch friends",
+    };
+  }
+};
+
+export const manageFriend = async (
+  data: FriendActionData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/friends/manage/", data);
+    return { 
+      success: true, 
+      data: response.data,
+      message: response.data.message 
+    };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        `Failed to ${data.action} friend`,
+    };
+  }
+};

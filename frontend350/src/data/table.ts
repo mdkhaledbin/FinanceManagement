@@ -6,6 +6,7 @@ interface TableDataType {
   modified_at: string; // ISO 8601 datetime format
   description?: string; // Optional field
   pendingCount: number;
+  headers?: string[];
 }
 
 const tableData = [

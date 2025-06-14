@@ -6,7 +6,12 @@ export type TableDataAction =
   | { type: "SET_TABLES"; payload: TableDataType[] }
   | {
       type: "ADD_TABLE";
-      payload: { id: number; table_name: string; description: string };
+      payload: {
+        id: number;
+        table_name: string;
+        description: string;
+        headers: string[];
+      };
     };
 
 export const TableReducer = (
@@ -15,7 +20,9 @@ export const TableReducer = (
 ): TableDataType[] => {
   switch (action.type) {
     case "SET_TABLES": {
-      return [...action.payload];
+      console.log("at tablereducer set table: ",action.payload);
+      
+      return [...action.payload.data];
     }
     case "ADD_TABLE": {
       return [

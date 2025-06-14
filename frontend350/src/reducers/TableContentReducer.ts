@@ -1,8 +1,23 @@
 import { TableRow, TableData, JsonTableItem } from "../data/TableContent";
 
+export interface CreateTablePayload {
+  table_name: string;
+  headers: string[];
+  description: string;
+}
+
 export type JsonTableAction =
-  | { type: "ADD_TABLE"; payload: { id: number; data: TableData } }
-  | { type: "ADD_ROW"; payload: { tableId: number; row: TableRow } }
+  | {
+      type: "ADD_TABLE";
+      payload: CreateTablePayload | JsonTableItem;
+    }
+  | {
+      type: "ADD_ROW";
+      payload: {
+        tableId: number;
+        row: Omit<TableRow, "id">;
+      };
+    }
   | {
       type: "EDIT_ROW";
       payload: {
@@ -11,14 +26,48 @@ export type JsonTableAction =
         newRow: Partial<TableRow>;
       };
     }
-  | { type: "DELETE_ROW"; payload: { tableId: number; rowId: number | string } }
+  | {
+      type: "DELETE_ROW";
+      payload: {
+        tableId: number;
+        rowId: number | string;
+      };
+    }
   | {
       type: "EDIT_TABLE_HEADERS";
-      payload: { tableId: number; headers: string[] };
+      payload: {
+        tableId: number;
+        headers: string[];
+      };
     }
-  | { type: "DELETE_COLUMN"; payload: { tableId: number; header: string } }
-  | { type: "DELETE_TABLE"; payload: { tableId: number } }
-  | { type: "ADD_COLUMN"; payload: { tableId: number; header: string } }
+  | {
+      type: "DELETE_TABLE";
+      payload: {
+        tableId: number;
+      };
+    }
+  | {
+      type: "ADD_COLUMN";
+      payload: {
+        tableId: number;
+        header: string;
+      };
+    }
+  | {
+      type: "EDIT_HEADER";
+      payload: {
+        tableId: number;
+        oldHeader: string;
+        newHeader: string;
+      };
+    }
+  | {
+      type: "DELETE_COLUMN";
+      payload: {
+        tableId: number;
+        header: string;
+      };
+    }
   | { type: "SET_TABLES"; payload: JsonTableItem[] };
 
 export function jsonTableReducer(
@@ -42,11 +91,17 @@ export function jsonTableReducer(
       const { tableId, row } = action.payload;
       return state.map((table) => {
         if (table.id === tableId) {
+          // Create a new row with the data from the backend
+          const newRow: TableRow = {
+            id: row.id || `row-${Date.now()}`,
+            ...row,
+          };
+
           return {
             ...table,
             data: {
               ...table.data,
-              rows: [...table.data.rows, row],
+              rows: [...table.data.rows, newRow],
             },
           };
         }
@@ -137,6 +192,38 @@ export function jsonTableReducer(
       });
     }
 
+    case "DELETE_TABLE": {
+      const { tableId } = action.payload;
+      return state.filter((table) => table.id !== tableId);
+    }
+
+    case "EDIT_HEADER": {
+      const { tableId, oldHeader, newHeader } = action.payload;
+      return state.map((table) => {
+        if (table.id === tableId) {
+          const newHeaders = table.data.headers.map((header) =>
+            header === oldHeader ? newHeader : header
+          );
+          return {
+            ...table,
+            data: {
+              ...table.data,
+              headers: newHeaders,
+              rows: table.data.rows.map((row) => {
+                const newRow = { ...row };
+                if (oldHeader in newRow) {
+                  newRow[newHeader] = newRow[oldHeader];
+                  delete newRow[oldHeader];
+                }
+                return newRow;
+              }),
+            },
+          };
+        }
+        return table;
+      });
+    }
+
     case "DELETE_COLUMN": {
       const { tableId, header } = action.payload;
       return state.map((table) => {
@@ -147,7 +234,8 @@ export function jsonTableReducer(
               ...table.data,
               headers: table.data.headers.filter((h) => h !== header),
               rows: table.data.rows.map((row) => {
-                const { [header]: deletedField, ...newRow } = row;
+                const newRow = { ...row };
+                delete newRow[header];
                 return newRow;
               }),
             },
@@ -155,11 +243,6 @@ export function jsonTableReducer(
         }
         return table;
       });
-    }
-
-    case "DELETE_TABLE": {
-      const { tableId } = action.payload;
-      return state.filter((table) => table.id !== tableId);
     }
 
     default:

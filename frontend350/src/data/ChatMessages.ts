@@ -10,6 +10,7 @@ export interface ChatMessage {
     response: string;
     tools_called: Array<{
       name: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args: Record<string, any>;
     }>;
     streaming_info?: {
@@ -33,20 +34,20 @@ export const defaultChatMessages: ChatMessage[] = [
     text: "Hello! How can I help you today?",
     displayedText: "Hello! How can I help you today?",
     sender: "bot",
-    timestamp: new Date(),
+    timestamp: new Date()
   },
   {
     id: "2",
-    text: "I'd like to see the latest table updates.",
-    displayedText: "I'd like to see the latest table updates.",
+    text: "I’d like to see the latest table updates.",
+    displayedText: "I’d like to see the latest table updates.",
     sender: "user",
-    timestamp: new Date(),
+    timestamp: new Date()
   },
   {
     id: "3",
     text: "Sure! Here are the most recent table updates:",
     displayedText: "Sure! Here are the most recent table updates:",
     sender: "bot",
-    timestamp: new Date(),
-  },
+    timestamp: new Date()
+  }
 ];

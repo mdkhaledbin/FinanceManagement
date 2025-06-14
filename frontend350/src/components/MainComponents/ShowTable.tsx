@@ -2,9 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useTablesContent, useTablesData } from "@/context/DataProviderReal";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
-import { TableRow } from "@/data/TableContent";
+import { TableRow, JsonTableItem } from "@/data/TableContent";
 import { useTheme } from "@/context/ThemeProvider";
 import { handleJsonTableOperation } from "@/api/TableContentApi";
+import { jsonTableApi } from "@/api/TableContentApi";
 
 // Simple icon components for demonstration
 type IconProps = {
@@ -118,9 +119,24 @@ const ShowTable = () => {
     header?: string;
   }>({ visible: false, x: 0, y: 0 });
 
+  const [editingHeader, setEditingHeader] = useState<{
+    header: string;
+    value: string;
+  } | null>(null);
+
+  const [isOperationInProgress, setIsOperationInProgress] = useState(false);
+  const [lastOperationError, setLastOperationError] = useState<string | null>(
+    null
+  );
+
   // Cell editing handlers
   const handleCellClick = (rowIndex: number, header: string) => {
-    if (header === "id") return; // Prevent editing if header is "id"
+    // Check if header matches any of the serial number patterns
+    if (
+      header.toLowerCase().match(/^(id|id number|number|no\.?|serial|sr\.?)$/i)
+    ) {
+      return; // Prevent editing if header matches serial number patterns
+    }
 
     const cellValue = rows[rowIndex][header];
     setEditingCell({ rowIndex, header });
@@ -298,34 +314,113 @@ const ShowTable = () => {
     }
   };
 
-  const handleAddRow = async () => {
-    console.log("🔄 Adding new row...");
+  // Add a function to refresh table data
+  const refreshTableData = async () => {
+    try {
+      if (!selectedTable) {
+        throw new Error("No table selected");
+      }
 
-    // Ensure we have table content
-    if (TableContent.length === 0) {
-      console.error("❌ No table content available");
+      // Get the current table data
+      const response = await jsonTableApi.getTables();
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to refresh table data");
+      }
+
+      // Update the state with the new data
+      dispatchtablesContent({
+        type: "SET_TABLES",
+        payload: response.data as JsonTableItem[],
+      });
+    } catch (error) {
+      console.error("Failed to refresh table data:", error);
+    }
+  };
+
+  const handleDeleteColumn = async (header: string) => {
+    if (isOperationInProgress) {
+      console.log("Operation already in progress, please wait...");
       return;
     }
 
     try {
-      // Create new row with auto-incremented ID
-      const newRowId = Math.max(...rows.map((r) => Number(r.id)), 0) + 1;
-      const newRow: TableRow = {
-        id: newRowId,
-      };
+      setIsOperationInProgress(true);
+      setLastOperationError(null);
 
-      // Add empty fields for all headers except 'id'
+      if (!TableContent || TableContent.length === 0) {
+        throw new Error("No table content available");
+      }
+
+      const tableId = TableContent[0].id;
+      if (!tableId) {
+        throw new Error("Invalid table ID");
+      }
+
+      if (headers.length <= 1) {
+        throw new Error("Cannot delete the last column");
+      }
+
+      if (header === "id") {
+        throw new Error("Cannot delete the ID column");
+      }
+
+      console.log("Deleting column:", { tableId, header });
+
+      const response = await handleJsonTableOperation(
+        {
+          type: "EDIT_TABLE_HEADERS",
+          payload: {
+            tableId,
+            headers: [header], // Send the header to delete
+          },
+        },
+        dispatchtablesContent
+      );
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to delete column");
+      }
+
+      console.log("Column deleted successfully");
+
+      // Refresh table data to ensure consistency
+      await refreshTableData();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Error in handleDeleteColumn:", errorMessage);
+      setLastOperationError(errorMessage);
+      // Refresh table data to recover from error state
+      await refreshTableData();
+    } finally {
+      setIsOperationInProgress(false);
+    }
+  };
+
+  const handleAddRow = async () => {
+    if (isOperationInProgress) {
+      console.log("Operation already in progress, please wait...");
+      return;
+    }
+
+    try {
+      setIsOperationInProgress(true);
+      setLastOperationError(null);
+
+      if (!TableContent || TableContent.length === 0) {
+        throw new Error("No table content available");
+      }
+
+      // Create initial row with empty values
+      const newRow: Omit<TableRow, "id"> = {};
       headers.forEach((header) => {
         if (header !== "id") {
-          newRow[header] = ""; // Set all fields to empty string
+          newRow[header] = "";
         }
       });
 
-      console.log("📝 New row to add:", newRow);
-      console.log("🎯 Target table ID:", TableContent[0].id);
-
-      // Make API call to add row
-      await handleJsonTableOperation(
+      const response = await handleJsonTableOperation(
         {
           type: "ADD_ROW",
           payload: {
@@ -336,83 +431,125 @@ const ShowTable = () => {
         dispatchtablesContent
       );
 
-      // Auto-focus the first editable cell after adding
-      setTimeout(() => {
-        setEditingCell({
-          rowIndex: rows.length, // This will be the new row's index
-          header: headers[1], // First non-ID column
-        });
-        setEditValue("");
-      }, 100);
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to add row");
+      }
 
-      console.log("✅ Row added successfully!");
+      if (response?.data) {
+        console.log("Add Row Response:", response.data);
+
+        // Refresh table data to ensure consistency
+        await refreshTableData();
+
+        // Set editing cell after successful addition
+        setTimeout(() => {
+          const newRowIndex = rows.length;
+          setEditingCell({
+            rowIndex: newRowIndex,
+            header: headers[1],
+          });
+          setEditValue("");
+        }, 0);
+      }
     } catch (error) {
-      console.error("❌ Failed to add row:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Failed to add row:", errorMessage);
+      setLastOperationError(errorMessage);
+      // Refresh table data to recover from error state
+      await refreshTableData();
+    } finally {
+      setIsOperationInProgress(false);
     }
   };
+
   const handleDuplicateRow = async (rowId: number | string) => {
-    // console.log("Duplicating row with id:", rowId); // Debug log
     if (rowId === null) return;
 
-    const newRow: TableRow = {
-      id: Math.max(...rows.map((r) => Number(r.id)), 0) + 1,
-    };
     const sourceRow = rows.find((r) => r.id === rowId);
-    // console.log("Source row:", sourceRow); // Debug log
-
     if (!sourceRow) {
       console.error("No row found with id:", rowId);
       return;
     }
 
+    // Create new row with source data
+    const newRow: Omit<TableRow, "id"> = {};
     headers.forEach((header) => {
       if (header !== "id") {
         newRow[header] = sourceRow[header];
       }
     });
 
-    console.log("New duplicated row:", newRow); // Debug log
-
-    await handleJsonTableOperation(
-      {
-        type: "ADD_ROW",
-        payload: {
-          tableId: TableContent[0].id,
-          row: newRow,
+    try {
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_ROW",
+          payload: {
+            tableId: TableContent[0].id,
+            row: newRow,
+          },
         },
-      },
-      dispatchtablesContent
-    );
+        dispatchtablesContent
+      );
 
-    // dispatchtablesContent({
-    //   type: "ADD_ROW",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     row: newRow,
-    //   },
-    // });
+      if (response?.success && response?.data) {
+        console.log("Duplicate Row Response:", response.data);
+      }
+    } catch (error) {
+      console.error("Failed to duplicate row:", error);
+    }
   };
+
   const handleAddColumn = async () => {
-    const newHeader = `column_${headers.length + 1}`;
+    try {
+      if (!TableContent || TableContent.length === 0) {
+        console.error("No table content available");
+        return;
+      }
 
-    await handleJsonTableOperation(
-      {
-        type: "ADD_COLUMN",
-        payload: {
-          tableId: TableContent[0].id,
-          header: newHeader,
+      const tableId = TableContent[0].id;
+      if (!tableId) {
+        console.error("Invalid table ID");
+        return;
+      }
+
+      // Generate a unique column name
+      const existingHeaders = TableContent[0].data.headers;
+      let columnNumber = existingHeaders.length;
+      let newHeader = `column_${columnNumber}`;
+
+      // Ensure the header name is unique
+      while (existingHeaders.includes(newHeader)) {
+        columnNumber++;
+        newHeader = `column_${columnNumber}`;
+      }
+
+      console.log("Adding new column:", { tableId, newHeader });
+
+      const response = await handleJsonTableOperation(
+        {
+          type: "ADD_COLUMN",
+          payload: {
+            tableId,
+            header: newHeader,
+          },
         },
-      },
-      dispatchtablesContent
-    );
+        dispatchtablesContent
+      );
 
-    // dispatchtablesContent({
-    //   type: "ADD_COLUMN",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     header: newHeader,
-    //   },
-    // });
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to add column");
+      }
+
+      // If we reach here, the operation was successful
+      console.log("Column added successfully");
+    } catch (error) {
+      console.error(
+        "Error in handleAddColumn:",
+        error instanceof Error ? error.message : "Unknown error occurred"
+      );
+      // Show error to user (you can implement a toast notification here)
+    }
   };
 
   const handleDeleteRow = async (rowId: number | string) => {
@@ -435,40 +572,39 @@ const ShowTable = () => {
     // });
   };
 
-  const handleDeleteColumn = async (header: string) => {
-    if (headers.length <= 1) return; // Don't delete the last column
+  // Update the delete column button to show loading state
+  const renderDeleteColumnButton = (header: string) => (
+    <button
+      onClick={() => handleDeleteColumn(header)}
+      className={`transition-colors ${
+        isOperationInProgress
+          ? "opacity-50 cursor-not-allowed"
+          : theme === "dark"
+          ? "text-gray-500 hover:text-red-400"
+          : "text-gray-400 hover:text-red-500"
+      }`}
+      title="Delete column"
+      disabled={isOperationInProgress}
+    >
+      <TrashIcon className="w-4 h-4" />
+    </button>
+  );
 
-    await handleJsonTableOperation(
-      {
-        type: "DELETE_COLUMN",
-        payload: {
-          tableId: TableContent[0].id,
-          header: header,
-        },
-      },
-      dispatchtablesContent
-    );
-
-    // dispatchtablesContent({
-    //   type: "DELETE_COLUMN",
-    //   payload: {
-    //     tableId: TableContent[0].id,
-    //     header: header,
-    //   },
-    // });
-  };
-
-  // Context menu
   const handleContextMenu = (
     e: React.MouseEvent,
     rowIndex?: number,
     header?: string
   ) => {
     e.preventDefault();
+
+    // Get absolute position accounting for scroll
+    const x = e.clientX + window.scrollX - 265;
+    const y = e.clientY + window.scrollY - 37;
+
     setContextMenu({
       visible: true,
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       rowIndex,
       header,
     });
@@ -480,6 +616,80 @@ const ShowTable = () => {
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  const handleHeaderDoubleClick = (header: string) => {
+    if (header === "id") return; // Don't allow editing the ID header
+    setEditingHeader({ header, value: header });
+  };
+
+  const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (editingHeader) {
+      setEditingHeader({ ...editingHeader, value: e.target.value });
+    }
+  };
+
+  const handleHeaderBlur = async () => {
+    if (!editingHeader) return;
+
+    const { header: oldHeader, value: newHeader } = editingHeader;
+    if (oldHeader === newHeader) {
+      setEditingHeader(null);
+      return;
+    }
+
+    try {
+      await handleJsonTableOperation(
+        {
+          type: "EDIT_HEADER",
+          payload: {
+            tableId: TableContent[0].id,
+            oldHeader,
+            newHeader,
+          },
+        },
+        dispatchtablesContent
+      );
+    } catch (error) {
+      console.error("Failed to edit header:", error);
+    }
+
+    setEditingHeader(null);
+  };
+
+  const handleHeaderKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleHeaderBlur();
+    } else if (e.key === "Escape") {
+      setEditingHeader(null);
+    }
+  };
+
+  // Add error display component
+  const ErrorDisplay = () => {
+    if (!lastOperationError) return null;
+
+    return (
+      <div
+        className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50
+        ${
+          theme === "dark"
+            ? "bg-red-900/90 text-red-100"
+            : "bg-red-100 text-red-900"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          <span>{lastOperationError}</span>
+          <button
+            onClick={() => setLastOperationError(null)}
+            className="ml-2 hover:opacity-70"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   if (TableContent.length === 0) {
     return (
@@ -493,113 +703,127 @@ const ShowTable = () => {
 
   return (
     <div
-      className={`overflow-auto max-h-[600px] mt-0 rounded-xl shadow-2xl relative
+      className={`overflow-auto h-[90vh] mt-0 rounded-2xl shadow-2xl relative pb-[-5]
   ${
     theme === "dark"
-      ? "bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100"
-      : "bg-gradient-to-br from-gray-50 to-white text-gray-800 border border-gray-200"
+      ? "bg-gradient-to-br from-gray-900 via-gray-800/95 to-gray-900/90 text-gray-100"
+      : "bg-gradient-to-br from-blue-50 via-gray-50 to-indigo-50 text-gray-800 border border-gray-200"
   }`}
     >
+      <ErrorDisplay />
       <div className="scrollbar-custom pt-2 pb-2">
         <div className="min-w-max">
-          {/* Enhanced Toolbar */}
+          {/* Enhanced Toolbar with Glass Morphism */}
           <div
-            className={`p-3 border-b flex justify-between items-center
+            className={`p-4 border-b flex justify-between items-center sticky top-0 z-20 backdrop-blur-lg
               ${
                 theme === "dark"
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-gray-50 border-gray-200"
+                  ? "bg-gray-900/80 border-gray-700 shadow-lg"
+                  : "bg-white/80 border-gray-200 shadow-sm"
               }`}
           >
-            <div className="flex items-center space-x-2">
-              <h2 className="text-xl font-semibold">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
                 {selectedTableData[0]?.table_name ?? ""}
               </h2>
               <span
-                className={`px-2 py-1 rounded-full text-xs
+                className={`px-3 py-1 rounded-full text-xs font-medium shadow-inner
         ${
           theme === "dark"
-            ? "bg-blue-900/50 text-blue-300"
-            : "bg-blue-100 text-blue-700"
+            ? "bg-blue-900/30 text-blue-300 border border-blue-800/50"
+            : "bg-blue-100/80 text-blue-700 border border-blue-200"
         }`}
               >
-                {rows.length} entries
+                {rows.length} {rows.length === 1 ? "entry" : "entries"}
               </span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <button
                 onClick={handleAddRow}
-                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 transition-all duration-200 shadow-lg
+                className={`px-5 py-2.5 text-white rounded-xl flex items-center gap-2 transition-all duration-500 ease-in-out shadow-lg hover:scale-[1.02]
           ${
             theme === "dark"
-              ? "bg-blue-600 hover:bg-blue-500 hover:shadow-blue-500/20"
-              : "bg-blue-600 hover:bg-blue-500 hover:shadow-blue-500/30"
+              ? "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-500/30"
+              : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 hover:shadow-blue-400/40"
           }`}
               >
                 <PlusIcon className="w-4 h-4" />
-                Add Transaction
+                <span className="font-medium">Add Row</span>
               </button>
               <button
                 onClick={handleAddColumn}
-                className={`px-4 py-2 text-white rounded-lg flex items-center gap-2 transition-all duration-200 shadow-lg
+                className={`px-5 py-2.5 text-white rounded-xl flex items-center gap-2 transition-all duration-500 ease-in-out shadow-lg hover:scale-[1.02]
           ${
             theme === "dark"
-              ? "bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/20"
-              : "bg-emerald-600 hover:bg-emerald-500 hover:shadow-emerald-500/30"
+              ? "bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 hover:shadow-emerald-500/30"
+              : "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 hover:shadow-emerald-400/40"
           }`}
               >
                 <ColumnIcon className="w-4 h-4" />
-                Add Field
+                <span className="font-medium">Add Field</span>
               </button>
             </div>
           </div>
 
-          {/* Luxurious Table */}
+          {/* Luxurious Table with Enhanced Styling */}
           <table
             ref={tableRef}
             className="min-w-full border-collapse table-fixed text-sm font-sans overflow-x-auto"
             onKeyDown={handleKeyDown}
           >
-            <thead className="sticky top-0 z-10">
+            <thead className="sticky top-16 z-10">
               <tr
-                className={`backdrop-blur-sm
-        ${theme === "dark" ? "bg-gray-800/90" : "bg-white/90"}`}
+                className={`backdrop-blur-lg
+        ${theme === "dark" ? "bg-gray-900/80" : "bg-white/90"} shadow-sm`}
               >
                 {headers.map((header) => (
                   <th
                     key={header}
-                    className={`px-6 py-4 border-b text-left font-medium select-none
+                    className={`px-6 py-4 border-b text-left font-medium select-none transition-colors duration-500 ease-in-out
               ${
                 theme === "dark"
-                  ? "border-gray-700 text-gray-300"
-                  : "border-gray-200 text-gray-600"
+                  ? "border-gray-700 text-gray-300 hover:bg-gray-800/50"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
-                    style={{ minWidth: "150px" }}
+                    style={{ minWidth: "180px" }}
+                    onDoubleClick={() => handleHeaderDoubleClick(header)}
                     onContextMenu={(e) =>
                       header !== "id" && handleContextMenu(e, undefined, header)
                     }
                   >
                     <div className="flex items-center justify-between">
-                      <span
-                        className={`uppercase tracking-wider text-xs font-semibold
-                ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
-                      >
-                        {header}
-                      </span>
-                      {headers.length > 1 && header !== "id" && (
-                        <button
-                          onClick={() => handleDeleteColumn(header)}
-                          className={`transition-colors
+                      {editingHeader?.header === header ? (
+                        <input
+                          type="text"
+                          value={editingHeader.value}
+                          onChange={handleHeaderChange}
+                          onBlur={handleHeaderBlur}
+                          onKeyDown={handleHeaderKeyDown}
+                          autoFocus
+                          className={`w-full px-3 py-2 rounded-xl focus:ring-2 outline-none transition-all shadow-inner
                     ${
                       theme === "dark"
-                        ? "text-gray-500 hover:text-red-400"
-                        : "text-gray-400 hover:text-red-500"
+                        ? "bg-gray-800 border border-blue-500/70 text-white focus:ring-blue-400/50"
+                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300/50"
                     }`}
-                          title="Delete column"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
+                        />
+                      ) : (
+                        <div className="flex items-center">
+                          <span
+                            className={`uppercase tracking-wider text-xs font-bold bg-clip-text text-transparent bg-gradient-to-r
+                              ${
+                                theme === "dark"
+                                  ? "from-blue-400 to-emerald-400"
+                                  : "from-blue-600 to-emerald-600"
+                              }`}
+                          >
+                            {header}
+                          </span>
+                        </div>
                       )}
+                      {headers.length > 1 &&
+                        header !== "id" &&
+                        renderDeleteColumnButton(header)}
                     </div>
                   </th>
                 ))}
@@ -607,26 +831,34 @@ const ShowTable = () => {
             </thead>
             <tbody
               className={`divide-y
-      ${theme === "dark" ? "divide-gray-700" : "divide-gray-200"}`}
+                ${
+                  theme === "dark"
+                    ? "divide-gray-800/50 hover:divide-gray-700/50"
+                    : "divide-gray-100/80 hover:divide-gray-200/80"
+                }`}
             >
               {rows.map((row, rowIndex) => (
                 <tr
-                  key={
-                    typeof row.id === "string" || typeof row.id === "number"
-                      ? row.id
-                      : rowIndex
-                  }
-                  className={`transition-colors duration-150 group
-            ${theme === "dark" ? "hover:bg-gray-800/50" : "hover:bg-gray-50"}`}
+                  key={typeof row.id === "string" ? row.id : `row-${rowIndex}`}
+                  className={`transition-all duration-500 ease-in-out group
+            ${
+              theme === "dark"
+                ? "hover:bg-gray-800/30 hover:shadow-[0_0_15px_rgba(0,0,0,0.1)]"
+                : "hover:bg-gray-50/70 hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]"
+            }`}
                   onContextMenu={(e) => handleContextMenu(e, rowIndex)}
                 >
                   {headers.map((header) => (
                     <td
                       key={`${rowIndex}-${header}`}
-                      className={`px-6 py-4 ${
+                      className={`px-6 py-4 transition-colors duration-500 ease-in-out ${
                         header === "amount" ? "font-mono" : ""
                       }
-                ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                ${
+                  theme === "dark"
+                    ? "text-gray-300 group-hover:text-gray-100"
+                    : "text-gray-700 group-hover:text-gray-900"
+                }`}
                       onClick={() => handleCellClick(rowIndex, header)}
                     >
                       {editingCell?.rowIndex === rowIndex &&
@@ -637,18 +869,19 @@ const ShowTable = () => {
                           onChange={handleCellChange}
                           onBlur={handleCellBlur}
                           autoFocus
-                          className={`w-full px-3 py-2 rounded-lg focus:ring-2 outline-none transition-all
+                          className={`w-full px-4 py-2.5 rounded-xl transition-all duration-500 ease-in-out shadow-inner
                     ${
                       theme === "dark"
-                        ? "bg-gray-700 border border-blue-500 text-white focus:ring-blue-400"
-                        : "bg-white border border-blue-400 text-gray-800 focus:ring-blue-300"
-                    }`}
+                        ? "bg-gray-800/70 text-white border border-gray-700 hover:border-blue-500/70 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        : "bg-white text-gray-800 border border-gray-200 hover:border-blue-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20"
+                    }
+                    outline-none`}
                         />
                       ) : (
                         <div className="flex items-center">
                           {header === "amount" && (
                             <span
-                              className={`mr-2 text-xs ${
+                              className={`mr-2 text-sm ${
                                 parseFloat(String(row[header] ?? 0)) < 0
                                   ? theme === "dark"
                                     ? "text-red-400"
@@ -677,10 +910,18 @@ const ShowTable = () => {
                             }`}
                             title={String(row[header])}
                           >
-                            {header === "amount"
+                            {header
+                              .toLowerCase()
+                              .match(
+                                /^(id|id number|number|no\.?|serial|sr\.?)$/i
+                              )
+                              ? rowIndex + 1
+                              : header === "amount"
                               ? new Intl.NumberFormat("en-US", {
                                   style: "currency",
                                   currency: "USD",
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
                                 }).format(
                                   parseFloat(String(row[header] ?? 0)) || 0
                                 )
@@ -695,32 +936,39 @@ const ShowTable = () => {
             </tbody>
           </table>
 
-          {/* Status Bar */}
+          {/* Premium Status Bar */}
           <div
-            className={`sticky bottom-0 backdrop-blur-sm px-4 py-2 text-xs border-t flex justify-between items-center
+            className={`absolute bottom-0 left-0 right-0 backdrop-blur-lg px-5 py-3 text-xs border-t flex justify-between items-center z-50
               ${
                 theme === "dark"
-                  ? "bg-gray-800/90 border-gray-700 text-gray-400"
-                  : "bg-white/90 border-gray-200 text-gray-500"
-              }`}
+                  ? "bg-gray-900/80 border-gray-700 text-gray-400 shadow-lg"
+                  : "bg-white/90 border-gray-200 text-gray-500 shadow-sm"
+              } w-[100%]`}
           >
-            <div>Last updated: {selectedTableData[0]?.modified_at ?? ""}</div>
-            <div className="flex items-center gap-4 justify-end">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  theme === "dark" ? "bg-blue-500" : "bg-blue-400"
+                }`}
+              ></span>
+              Last updated: {selectedTableData[0]?.modified_at ?? "Just now"}
+            </div>
+            <div className="flex items-center gap-6 justify-end">
+              <span className="flex items-center gap-2">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-3 h-3 rounded-full ${
                     theme === "dark" ? "bg-emerald-400" : "bg-emerald-500"
                   }`}
                 ></span>
-                Income
+                <span className="font-medium">Income</span>
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-2">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-3 h-3 rounded-full ${
                     theme === "dark" ? "bg-red-400" : "bg-red-500"
                   }`}
                 ></span>
-                Expense
+                <span className="font-medium">Expense</span>
               </span>
             </div>
           </div>
@@ -730,19 +978,25 @@ const ShowTable = () => {
       {/* Premium Context Menu */}
       {contextMenu.visible && (
         <div
-          className={`fixed shadow-xl rounded-lg py-1 z-50 overflow-hidden min-w-[180px]
+          className={`fixed shadow-2xl rounded-xl py-1 z-50 overflow-hidden min-w-[200px] backdrop-blur-lg border
         ${
           theme === "dark"
-            ? "bg-gray-800 border border-gray-700"
-            : "bg-white border border-gray-200 shadow-lg"
+            ? "bg-gray-800/90 border-gray-700"
+            : "bg-white/95 border-gray-200"
         }`}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            transform: "scale(0.95)",
+            animation: "scaleIn 0.15s ease-out forwards",
+            transformOrigin: "top left",
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.rowIndex !== undefined && (
             <>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -757,14 +1011,14 @@ const ShowTable = () => {
                 }}
               >
                 <TrashIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-red-400" : "text-red-500"
                   }`}
                 />
-                <span>Delete Entry</span>
+                <span className="font-medium">Delete Entry</span>
               </button>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -779,11 +1033,11 @@ const ShowTable = () => {
                 }}
               >
                 <EditIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-blue-400" : "text-blue-500"
                   }`}
                 />
-                <span>Edit Entry</span>
+                <span className="font-medium">Edit Entry</span>
               </button>
               <div
                 className={`my-1 ${
@@ -793,16 +1047,14 @@ const ShowTable = () => {
                 }`}
               ></div>
               <button
-                className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+                className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
                 onClick={() => {
-                  // console.log("Context menu row index:", contextMenu.rowIndex); // Debug log
                   const rowId = rows[contextMenu.rowIndex!].id;
-                  // console.log("Row ID to duplicate:", rowId); // Debug log
                   if (typeof rowId === "string" || typeof rowId === "number") {
                     handleDuplicateRow(rowId);
                   }
@@ -810,17 +1062,17 @@ const ShowTable = () => {
                 }}
               >
                 <DuplicateIcon
-                  className={`w-4 h-4 ${
+                  className={`w-5 h-5 ${
                     theme === "dark" ? "text-purple-400" : "text-purple-500"
                   }`}
                 />
-                <span>Duplicate</span>
+                <span className="font-medium">Duplicate</span>
               </button>
             </>
           )}
           {contextMenu.header && contextMenu.header !== "id" && (
             <button
-              className={`flex w-full items-center px-4 py-3 transition-colors gap-2
+              className={`flex w-full items-center px-5 py-3 transition-all duration-500 ease-in-out gap-3 hover:pl-6
               ${
                 theme === "dark"
                   ? "text-gray-300 hover:bg-gray-700/80"
@@ -832,11 +1084,11 @@ const ShowTable = () => {
               }}
             >
               <TrashIcon
-                className={`w-4 h-4 ${
+                className={`w-5 h-5 ${
                   theme === "dark" ? "text-red-400" : "text-red-500"
                 }`}
               />
-              <span>Delete Column</span>
+              <span className="font-medium">Delete Column</span>
             </button>
           )}
         </div>

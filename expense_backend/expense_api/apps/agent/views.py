@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from asgiref.sync import async_to_sync
 import time
 
-from ..user_auth.authentication import IsAuthenticatedCustom, decode_refresh_token
+from ..user_auth.authentication import IsAuthenticatedCustom
 from ..user_auth.permission import JWTAuthentication
 from .serializers import (
     QuerySerializer, ResponseSerializer, 
@@ -24,12 +24,10 @@ class AgentAPIView(APIView):
 
     def post(self, request):
         try:
-            # Get user ID from token
-            refresh_token = request.COOKIES.get('refresh_token')
-            if not refresh_token:
-                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            user_id = decode_refresh_token(refresh_token)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
 
             # Validate input
             input_serializer = QuerySerializer(data=request.data)
@@ -38,7 +36,7 @@ class AgentAPIView(APIView):
 
             # Extract data from request
             query_data = input_serializer.validated_data
-            query_data['user_id'] = user_id  # Add user ID to the data
+            query_data['user_id'] = request.user.id  # ✅ Use authenticated user ID
 
             # Add additional context if provided
             if 'table_id' in request.data:
@@ -67,15 +65,13 @@ class AgentAPIView(APIView):
     def get(self, request):
         """Handle GET requests for basic status information."""
         try:
-            # Get user ID from token
-            refresh_token = request.COOKIES.get('refresh_token')
-            if not refresh_token:
-                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            user_id = decode_refresh_token(refresh_token)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
             
             return Response({
-                "user_id": user_id,
+                "user_id": request.user.id,
                 "status": "active"
             }, status=status.HTTP_200_OK)
             
@@ -159,15 +155,13 @@ class AgentHistoryAPIView(APIView):
     def get(self, request):
         """Get operation history."""
         try:
-            # Get user ID from token
-            refresh_token = request.COOKIES.get('refresh_token')
-            if not refresh_token:
-                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            user_id = decode_refresh_token(refresh_token)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
             
             return Response({
-                "user_id": user_id,
+                "user_id": request.user.id,
                 "history": []
             }, status=status.HTTP_200_OK)
             
@@ -184,12 +178,10 @@ class AgentStreamingAPIView(APIView):
     def post(self, request):
         """Handle requests with simple response."""
         try:
-            # Get user ID from token
-            refresh_token = request.COOKIES.get('refresh_token')
-            if not refresh_token:
-                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            user_id = decode_refresh_token(refresh_token)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
 
             # Validate input
             input_serializer = QuerySerializer(data=request.data)
@@ -198,27 +190,27 @@ class AgentStreamingAPIView(APIView):
 
             # Extract data from request
             query_data = input_serializer.validated_data
-            query_data['user_id'] = user_id
+            query_data['user_id'] = request.user.id  # ✅ Use authenticated user ID
 
-            # Add context if provided
+            # Add additional context if provided
             if 'table_id' in request.data:
                 query_data['table_id'] = request.data['table_id']
             if 'context_type' in request.data:
                 query_data['context_type'] = request.data['context_type']
-            
-            # Run agent and return simple response
+
+            # Run agent and get response
             response_obj = async_to_sync(self._run_agent)(query_data)
             
             # Process and clean the response
             cleaned_response = self._clean_response(response_obj)
             
             return Response(cleaned_response, status=status.HTTP_200_OK)
-
+            
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def _run_agent(self, query_data):
-        """Run agent with simple response."""
+        """Run agent without cleaning response."""
         try:
             return await ExpenseMCPClient.create_and_run_query(query_data)
         except Exception as e:
@@ -301,8 +293,12 @@ class ChatSessionListView(APIView):
     def get(self, request):
         """Get all chat sessions for the current user"""
         try:
-            user = self.get_user(request)
-            sessions = ChatSession.objects.filter(user=user, is_active=True)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            sessions = ChatSession.objects.filter(user=request.user, is_active=True)
             serializer = ChatSessionSerializer(sessions, many=True)
             
             return Response({
@@ -316,8 +312,10 @@ class ChatSessionListView(APIView):
     def post(self, request):
         """Create a new chat session"""
         try:
-            user = self.get_user(request)
-            request.user = user  # Add user to request for serializer context
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
             
             serializer = ChatSessionSerializer(data=request.data, context={'request': request})
             
@@ -335,13 +333,6 @@ class ChatSessionListView(APIView):
                 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def get_user(self, request):
-        refresh_token = request.COOKIES.get('refresh_token')
-        if not refresh_token:
-            raise Exception("Refresh token not provided.")
-        user_id = decode_refresh_token(refresh_token)
-        return User.objects.get(id=user_id)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -352,8 +343,12 @@ class ChatSessionDetailView(APIView):
     def get(self, request, session_id):
         """Get specific chat session details"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             serializer = ChatSessionSerializer(session)
             
             return Response({
@@ -367,8 +362,12 @@ class ChatSessionDetailView(APIView):
     def put(self, request, session_id):
         """Update chat session (e.g., title)"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             
             serializer = ChatSessionSerializer(session, data=request.data, partial=True)
             
@@ -390,8 +389,12 @@ class ChatSessionDetailView(APIView):
     def delete(self, request, session_id):
         """Delete chat session"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             
             # Soft delete by marking inactive
             session.is_active = False
@@ -403,13 +406,6 @@ class ChatSessionDetailView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def get_user(self, request):
-        refresh_token = request.COOKIES.get('refresh_token')
-        if not refresh_token:
-            raise Exception("Refresh token not provided.")
-        user_id = decode_refresh_token(refresh_token)
-        return User.objects.get(id=user_id)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -420,8 +416,12 @@ class ChatSessionMessagesView(APIView):
     def get(self, request, session_id):
         """Get all messages for a specific chat session"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             
             messages = ChatMessage.objects.filter(chat_session=session).order_by('timestamp')
             serializer = ChatMessageSerializer(messages, many=True)
@@ -441,8 +441,12 @@ class ChatSessionMessagesView(APIView):
     def delete(self, request, session_id):
         """Clear all messages in a chat session"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             
             deleted_count = ChatMessage.objects.filter(chat_session=session).delete()[0]
             
@@ -452,13 +456,6 @@ class ChatSessionMessagesView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def get_user(self, request):
-        refresh_token = request.COOKIES.get('refresh_token')
-        if not refresh_token:
-            raise Exception("Refresh token not provided.")
-        user_id = decode_refresh_token(refresh_token)
-        return User.objects.get(id=user_id)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -469,10 +466,30 @@ class SaveSessionMessageView(APIView):
     def post(self, request, session_id):
         """Save a message to a specific chat session"""
         try:
-            user = self.get_user(request)
-            session = get_object_or_404(ChatSession, session_id=session_id, user=user)
+            # ✅ Use Django's authenticated user
+            if not request.user.is_authenticated:
+                return Response({'message': "Authentication credentials were not provided or are invalid."}, 
+                              status=status.HTTP_401_UNAUTHORIZED)
+
+            session = get_object_or_404(ChatSession, session_id=session_id, user=request.user)
             
-            request.user = user
+            # Check if message with same ID already exists
+            message_id = request.data.get('message_id')
+            if message_id and ChatMessage.objects.filter(message_id=message_id).exists():
+                return Response({
+                    "message": "Message already exists.",
+                    "data": ChatMessageSerializer(ChatMessage.objects.get(message_id=message_id)).data
+                }, status=status.HTTP_200_OK)
+            
+            # Ensure all required fields are present
+            required_fields = ['message_id', 'text', 'sender']
+            for field in required_fields:
+                if field not in request.data:
+                    return Response({
+                        "message": "Invalid data.",
+                        "errors": {field: ["This field is required."]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
             serializer = ChatMessageSerializer(
                 data=request.data, 
                 context={'request': request, 'chat_session': session}
@@ -496,10 +513,3 @@ class SaveSessionMessageView(APIView):
                 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def get_user(self, request):
-        refresh_token = request.COOKIES.get('refresh_token')
-        if not refresh_token:
-            raise Exception("Refresh token not provided.")
-        user_id = decode_refresh_token(refresh_token)
-        return User.objects.get(id=user_id)

@@ -59,7 +59,7 @@ export default function Hero() {
             ever.
           </p>
           <a
-            href="/Chat/"
+            href="/chat/"
             className={
               theme === "dark"
                 ? primaryButtonStyleDark
