@@ -81,22 +81,21 @@ const AuthForm = () => {
           password2: formData.password2,
         });
       } else {
-        await loginUser({
+        const result = await loginUser({
           username: formData.username,
           password: formData.password,
         });
+        if (!result.success) {
+          setError(result.error || "Invalid username or password");
+          return;
+        }
       }
 
       await refreshUser();
       router.push("/chat");
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.detail ||
-        err.response?.data?.error ||
-        "An unexpected error occurred";
-      console.log(err);
-
-      setError(errorMessage);
+      // fallback for unexpected errors
+      setError("An unexpected error occurred. Please try again.");
     }
   };
 
