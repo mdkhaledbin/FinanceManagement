@@ -262,3 +262,50 @@ export const updateUserProfile = async (
     };
   }
 };
+
+// Friend Management Interfaces
+export interface FriendActionData {
+  friend_id: number;
+  action: "add" | "remove";
+}
+
+// Friend Management API Calls
+export const getFriendsList = async (): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.get("/auth/friends/");
+    return { 
+      success: true, 
+      data: response.data,
+      message: response.data.message 
+    };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        "Failed to fetch friends",
+    };
+  }
+};
+
+export const manageFriend = async (
+  data: FriendActionData
+): Promise<ApiResponse<any>> => {
+  try {
+    const response = await axiosInstance.post("/auth/friends/manage/", data);
+    return { 
+      success: true, 
+      data: response.data,
+      message: response.data.message 
+    };
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error:
+        (axiosError.response?.data as { message?: string })?.message ||
+        `Failed to ${data.action} friend`,
+    };
+  }
+};

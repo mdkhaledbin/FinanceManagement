@@ -6,6 +6,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 import time
+from django.db import models
 
 from ..user_auth.authentication import IsAuthenticatedCustom, decode_refresh_token, generate_access_token, generate_refresh_token
 from ..user_auth.permission import JWTAuthentication
@@ -31,14 +32,22 @@ class DynamicTableListView(APIView):
                     "message": "Authentication credentials were not provided or are invalid."
                 }, status=status.HTTP_401_UNAUTHORIZED)
 
-            tables = DynamicTableData.objects.filter(user=user)
-            if not tables.exists():
+            # Get user's own tables
+            own_tables = DynamicTableData.objects.filter(user=user)
+            
+            # Get tables shared with the user
+            shared_tables = DynamicTableData.objects.filter(shared_with=user)
+            
+            # Combine both querysets
+            all_tables = own_tables | shared_tables
+            
+            if not all_tables.exists():
                 return Response({
                     "message": "No dynamic tables found for the current user.",
                     "data": []
                 }, status=status.HTTP_200_OK)
 
-            serializer = DynamicTableSerializer(tables, many=True)
+            serializer = DynamicTableSerializer(all_tables, many=True)
             return Response({
                 "message": "Dynamic tables fetched successfully.",
                 "data": serializer.data
@@ -109,25 +118,43 @@ class DynamicTableUpdateView(APIView):
             
             
 class GetTableContentView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
     def get(self, request): 
         try:
-            tables = JsonTable.objects.all()
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+            user = User.objects.get(id=user_id)
+            
+            # Get tables that user owns or has access to
+            accessible_tables = DynamicTableData.objects.filter(
+                models.Q(user=user) | models.Q(shared_with=user)
+            )
+            
             result = []
 
-            for table in tables:
-                table_dict = {
-                    "id": table.table.id,  # Refers to DynamicTableData's ID
-                    "data": {
-                        "headers": table.headers,  # JSONField is already a list
-                        "rows": [
-                            {
-                                "id": row.id,  # Include the row's ID
-                                **row.data  # Include all the row data
-                            } for row in table.rows.all()  # Access rows via related_name
-                        ]
+            for table_data in accessible_tables:
+                try:
+                    table = JsonTable.objects.get(table=table_data)
+                    table_dict = {
+                        "id": table.table.id,  # Refers to DynamicTableData's ID
+                        "data": {
+                            "headers": table.headers,  # JSONField is already a list
+                            "rows": [
+                                {
+                                    "id": row.id,  # Include the row's ID
+                                    **row.data  # Include all the row data
+                                } for row in table.rows.all()  # Access rows via related_name
+                            ]
+                        }
                     }
-                }
-                result.append(table_dict)
+                    result.append(table_dict)
+                except JsonTable.DoesNotExist:
+                    continue
 
             return JsonResponse(result, safe=False, status=status.HTTP_200_OK)
 
@@ -506,4 +533,84 @@ class EditHeaderView(APIView):
             return Response({
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ShareTableView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def post(self, request):
+        try:
+            refresh_token = request.COOKIES.get('refresh_token')
+            if not refresh_token:
+                return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            user_id = decode_refresh_token(refresh_token)
+            current_user = User.objects.get(id=user_id)
+            
+            table_id = request.data.get('table_id')
+            friend_ids = request.data.get('friend_ids', [])
+            action = request.data.get('action')  # 'share' or 'unshare'
+            
+            if not table_id or not action:
+                return Response({
+                    "error": "table_id and action are required."
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            try:
+                table = DynamicTableData.objects.get(id=table_id, user=current_user)
+            except DynamicTableData.DoesNotExist:
+                return Response({
+                    "error": "Table not found or you don't have permission."
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+            if action == 'share':
+                if not friend_ids:
+                    return Response({
+                        "error": "friend_ids are required for sharing."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                for friend_id in friend_ids:
+                    try:
+                        friend = User.objects.get(id=friend_id)
+                        if friend in current_user.profile.friends.all():
+                            table.shared_with.add(friend)
+                    except User.DoesNotExist:
+                        continue
+                        
+                table.is_shared = True
+                table.save()
+                message = "Table shared successfully."
+                
+            elif action == 'unshare':
+                if not friend_ids:
+                    # Unshare with all friends
+                    table.shared_with.clear()
+                else:
+                    for friend_id in friend_ids:
+                        try:
+                            friend = User.objects.get(id=friend_id)
+                            table.shared_with.remove(friend)
+                        except User.DoesNotExist:
+                            continue
+                            
+                if not table.shared_with.exists():
+                    table.is_shared = False
+                    table.save()
+                    
+                message = "Table unshared successfully."
+                
+            else:
+                return Response({
+                    "error": "Invalid action. Use 'share' or 'unshare'."
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            return Response({
+                "message": message
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
                 

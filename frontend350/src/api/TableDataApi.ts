@@ -41,6 +41,12 @@ interface EditTablePayload {
   description?: string;
 }
 
+interface ShareTablePayload {
+  table_id: number;
+  friend_ids: number[];
+  action: "share" | "unshare";
+}
+
 // Create axios instance with base configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -272,6 +278,17 @@ export const tableApi = {
       tableId,
       header,
     });
+  },
+
+  // Share a table with friends
+  async shareTable(
+    payload: ShareTablePayload
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    return apiRequest<{ success: boolean }>(
+      "/main/share-table/",
+      "POST",
+      payload
+    );
   },
 };
 

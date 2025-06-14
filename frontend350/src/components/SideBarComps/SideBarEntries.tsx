@@ -6,19 +6,25 @@ import { TableDataType } from "@/data/table";
 import { useTheme } from "@/context/ThemeProvider";
 import { createPortal } from "react-dom";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
+import { tableApi } from "@/api/TableDataApi";
+import { getFriendsList } from "@/api/AuthApi";
+
+interface Friend {
+  id: number;
+  username: string;
+  email: string;
+}
 
 interface SideBarEntriesProps {
   table: TableDataType;
   onEdit: (id: number, name: string) => void;
   onDelete: (id: number) => void;
-  onShare: (id: number) => void;
 }
 
 const SideBarEntries: React.FC<SideBarEntriesProps> = ({
   table,
   onEdit,
   onDelete,
-  onShare,
 }) => {
   const { theme } = useTheme();
   const { selectedTable, setSelectedTable } = useSelectedTable();
@@ -29,6 +35,12 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [showDropDown, setShowDropDown] = useState(false);
+  const [showFriendsDropdown, setShowFriendsDropdown] = useState(false);
+  const friendsDropdownRef = useRef<HTMLDivElement>(null);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selectedFriends, setSelectedFriends] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSelectTable = (tableId: number | null) => {
     console.log("SideBarEntries - Table ID:", tableId);
@@ -43,12 +55,15 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node) &&
         buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
+        !buttonRef.current.contains(event.target as Node) &&
+        friendsDropdownRef.current &&
+        !friendsDropdownRef.current.contains(event.target as Node)
       ) {
         if (isEditing) {
           onEdit(table.id, editedName);
         }
         setShowDropDown(false);
+        setShowFriendsDropdown(false);
         setIsEditing(false);
       }
     },
@@ -98,6 +113,90 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
     window.addEventListener("scroll", handleScroll, true);
     return () => window.removeEventListener("scroll", handleScroll, true);
   }, [showDropDown]);
+
+  // Sync scroll position with main dropdown
+  useEffect(() => {
+    const handleScroll = () => {
+      if (showDropDown && showFriendsDropdown && dropdownRef.current) {
+        const mainDropdownRect = dropdownRef.current.getBoundingClientRect();
+        if (friendsDropdownRef.current) {
+          friendsDropdownRef.current.style.top = `${
+            mainDropdownRect.bottom + window.scrollY + 5
+          }px`;
+          friendsDropdownRef.current.style.left = `${mainDropdownRect.left}px`;
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, [showDropDown, showFriendsDropdown]);
+
+  const handleShare = async () => {
+    if (selectedFriends.length === 0) return;
+
+    setLoading(true);
+    try {
+      const response = await tableApi.shareTable({
+        table_id: table.id,
+        friend_ids: selectedFriends,
+        action: "share",
+      });
+
+      if (response.success) {
+        setShowFriendsDropdown(false);
+        setShowDropDown(false);
+      } else {
+        setError(response.error || "Failed to share table");
+      }
+    } catch {
+      setError("Failed to share table");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnshare = async () => {
+    if (selectedFriends.length === 0) return;
+
+    setLoading(true);
+    try {
+      const response = await tableApi.shareTable({
+        table_id: table.id,
+        friend_ids: selectedFriends,
+        action: "unshare",
+      });
+
+      if (response.success) {
+        setShowFriendsDropdown(false);
+        setShowDropDown(false);
+        if (selectedTable === table.id) handleSelectTable(null);
+      } else {
+        setError(response.error || "Failed to unshare table");
+      }
+    } catch {
+      setError("Failed to unshare table");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const response = await getFriendsList();
+        if (response.success && response.data?.data) {
+          setFriends(response.data.data);
+        }
+      } catch {
+        setError("Failed to fetch friends");
+      }
+    };
+
+    if (showFriendsDropdown) {
+      fetchFriends();
+    }
+  }, [showFriendsDropdown]);
 
   return (
     <div
@@ -260,8 +359,7 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onShare(table.id);
-                      setShowDropDown(false);
+                      setShowFriendsDropdown(true);
                     }}
                     className={`block w-full text-left px-4 py-2 text-sm ${
                       theme === "dark"
@@ -317,6 +415,124 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             minute: "2-digit",
           })}
         </p>
+      </div>
+
+      {showFriendsDropdown &&
+        createPortal(
+          <div
+            ref={friendsDropdownRef}
+            className={`fixed z-[1001] w-64 rounded-xl shadow-xl backdrop-blur-sm ${
+              theme === "dark"
+                ? "bg-gray-800/95 border border-gray-700/50"
+                : "bg-white/95 border border-gray-200/50"
+            }`}
+            style={{
+              top: `${dropdownPosition.top + 80}px`,
+              left: `${dropdownPosition.left}px`,
+            }}
+          >
+            <div className="p-3">
+              <div
+                className={`px-2 py-1.5 text-sm font-medium mb-2 ${
+                  theme === "dark"
+                    ? "text-gray-300 bg-gradient-to-r from-gray-700/50 to-gray-800/50"
+                    : "text-gray-700 bg-gradient-to-r from-gray-100/50 to-gray-50/50"
+                } rounded-lg`}
+              >
+                Share with friends
+              </div>
+              <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                {friends.map((friend) => (
+                  <div
+                    key={friend.id}
+                    className={`flex items-center p-2 rounded-lg mb-1 transition-all duration-200 ${
+                      theme === "dark"
+                        ? "hover:bg-gray-700/50"
+                        : "hover:bg-gray-100/50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      id={`friend-${friend.id}`}
+                      checked={selectedFriends.includes(friend.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedFriends([...selectedFriends, friend.id]);
+                        } else {
+                          setSelectedFriends(
+                            selectedFriends.filter((id) => id !== friend.id)
+                          );
+                        }
+                      }}
+                      className={`w-4 h-4 rounded border-2 ${
+                        theme === "dark"
+                          ? "border-gray-600 checked:bg-blue-500"
+                          : "border-gray-300 checked:bg-blue-500"
+                      } transition-colors duration-200`}
+                    />
+                    <label
+                      htmlFor={`friend-${friend.id}`}
+                      className={`ml-2 text-sm cursor-pointer ${
+                        theme === "dark" ? "text-gray-300" : "text-gray-700"
+                      }`}
+                    >
+                      <span className="font-medium">{friend.username}</span>
+                      <span
+                        className={`text-xs ml-1 ${
+                          theme === "dark" ? "text-gray-400" : "text-gray-500"
+                        }`}
+                      >
+                        ({friend.email})
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end space-x-2 mt-3 pt-2 border-t border-gray-200/50">
+                <button
+                  onClick={handleUnshare}
+                  disabled={loading || selectedFriends.length === 0}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 
+                    ${
+                      loading || selectedFriends.length === 0
+                        ? theme === "dark"
+                          ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
+                          : "bg-gray-200/50 text-gray-400 cursor-not-allowed"
+                        : theme === "dark"
+                        ? "bg-gradient-to-r from-red-500/90 to-red-600/90 hover:from-red-500 hover:to-red-600 text-white"
+                        : "bg-gradient-to-r from-red-500/90 to-red-600/90 hover:from-red-500 hover:to-red-600 text-white"
+                    }`}
+                >
+                  Unshare
+                </button>
+                <button
+                  onClick={handleShare}
+                  disabled={loading || selectedFriends.length === 0}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 
+                    ${
+                      loading || selectedFriends.length === 0
+                        ? theme === "dark"
+                          ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
+                          : "bg-gray-200/50 text-gray-400 cursor-not-allowed"
+                        : theme === "dark"
+                        ? "bg-gradient-to-r from-blue-500/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-600 text-white"
+                        : "bg-gradient-to-r from-blue-500/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-600 text-white"
+                    }`}
+                >
+                  Share
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      <div className="relative">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );

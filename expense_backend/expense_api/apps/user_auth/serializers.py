@@ -1,30 +1,44 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from .models import UserProfile
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name')
 
 class userRegisterSerializer(serializers.ModelSerializer):
-    password2 = serializers.CharField(write_only = True)
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2']
-    
-    def validate(self, data):
-        if data['password'] != data['password2']:
-            raise serializers.ValidationError({'password': "Password don't match."})
-        return data
-    
+        fields = ('id', 'username', 'email', 'password', 'first_name', 'last_name')
+        extra_kwargs = {'password': {'write_only': True}}
+
     def create(self, validated_data):
-        validated_data.pop('password2')
-        user = User.objects.create_user(**validated_data)
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
         return user
-    
-    def to_representation(self, instance):
-        representation =  super().to_representation(instance)
-        representation.pop('password', None)
-        return representation
-    
-    
-class UserSerializer(serializers.ModelSerializer):
-    
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    friends = serializers.SerializerMethodField()
+
     class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
+        model = UserProfile
+        fields = ('id', 'user', 'friends')
+
+    def get_friends(self, obj):
+        friends = obj.friends.all()
+        return UserSerializer([friend.user for friend in friends], many=True).data
+
+class FriendSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    friend = UserSerializer(read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ('id', 'user', 'friend', 'created_at')

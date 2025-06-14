@@ -7,6 +7,7 @@ from .authentication import IsAuthenticatedCustom, decode_refresh_token, generat
 from .permission import JWTAuthentication
 from .serializers import UserSerializer, userRegisterSerializer
 from django.contrib.auth.models import User
+from .models import UserProfile
 
 # Create your views here.
 
@@ -250,4 +251,101 @@ class UpdateUserProfile(APIView):
             "message": "Profile updated successfully",
             "user": UserSerializer(user).data
         }, status=status.HTTP_200_OK)
+
+class FriendsListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Check if user has a profile, if not create one
+            if not hasattr(user, 'profile'):
+                UserProfile.objects.create(user=user)
+                user.refresh_from_db()  # Refresh user object to get the new profile
+            
+            # Get friends from both directions
+            user_friends = user.profile.friends.all()
+            friends_who_added_me = User.objects.filter(profile__friends=user)
+            
+            # Combine both querysets and remove duplicates
+            all_friends = user_friends.union(friends_who_added_me)
+            
+            serializer = UserSerializer(all_friends, many=True)
+            return Response({
+                "message": "Friends list fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error in FriendsListView: {str(e)}")  # Add logging
+            return Response({
+                "error": "Failed to fetch friends list",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ManageFriendView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticatedCustom]
+
+    def post(self, request):
+        try:
+            friend_id = request.data.get('friend_id')
+            action = request.data.get('action')  # 'add' or 'remove'
+
+            if not friend_id or not action:
+                return Response({
+                    "error": "friend_id and action are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                friend = User.objects.get(id=friend_id)
+            except User.DoesNotExist:
+                return Response({
+                    "error": "Friend not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            user = request.user
+            
+            # Check if user has a profile, if not create one
+            if not hasattr(user, 'profile'):
+                UserProfile.objects.create(user=user)
+                user.refresh_from_db()  # Refresh user object to get the new profile
+                
+            # Check if friend has a profile, if not create one
+            if not hasattr(friend, 'profile'):
+                UserProfile.objects.create(user=friend)
+                friend.refresh_from_db()  # Refresh friend object to get the new profile
+
+            if action == 'add':
+                if friend in user.profile.friends.all():
+                    return Response({
+                        "error": "User is already your friend"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                user.profile.friends.add(friend)
+                message = "Friend added successfully"
+            elif action == 'remove':
+                if friend not in user.profile.friends.all():
+                    return Response({
+                        "error": "User is not your friend"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                user.profile.friends.remove(friend)
+                message = "Friend removed successfully"
+            else:
+                return Response({
+                    "error": "Invalid action. Use 'add' or 'remove'"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                "message": message
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error in ManageFriendView: {str(e)}")  # Add logging
+            return Response({
+                "error": "Failed to manage friend",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         

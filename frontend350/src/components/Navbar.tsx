@@ -3,10 +3,17 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { LuSunDim } from "react-icons/lu";
 import { HiMoon } from "react-icons/hi2";
-import { HiMenu, HiX, HiLogout, HiUser, HiCog } from "react-icons/hi";
+import {
+  HiMenu,
+  HiX,
+  HiLogout,
+  HiUser,
+  HiCog,
+  HiUserGroup,
+} from "react-icons/hi";
 import { useTheme } from "@/context/ThemeProvider";
 import { useUser } from "@/context/AuthProvider";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import SettingsModal from "./SettingsModal";
 import { createPortal } from "react-dom";
 
@@ -21,10 +28,15 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleSignOut = () => {
     signOut();
     setShowUserMenu(false);
+  };
+
+  const handleFriendsClick = () => {
+    router.push("/users");
   };
 
   return (
@@ -109,6 +121,24 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
         )}
 
         <div className="flex items-center space-x-2 md:space-x-4">
+          {/* Friends Button */}
+          {pathname !== "/users" && (
+            <button
+              onClick={handleFriendsClick}
+              className={`p-2 rounded-full transition-all duration-500 ease-in-out ${
+                theme === "dark"
+                  ? "bg-gray-700/80 text-white hover:bg-gray-600 hover:scale-110"
+                  : "bg-gray-100/80 text-gray-900 hover:bg-gray-200 hover:scale-110"
+              } shadow-lg flex items-center justify-center`}
+              aria-label="Friends"
+            >
+              <HiUserGroup
+                size={20}
+                className="transition-all duration-500 ease-in-out hover:rotate-12"
+              />
+            </button>
+          )}
+
           {/* Theme Toggle */}
           <button
             onClick={() => toggleTheme()}
