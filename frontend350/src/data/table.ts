@@ -1,4 +1,4 @@
-interface TableDataType {
+export interface TableDataType {
   id: number;
   table_name: string;
   user_id: string;
@@ -7,6 +7,15 @@ interface TableDataType {
   description?: string; // Optional field
   pendingCount: number;
   headers?: string[];
+  is_shared: boolean;
+  owner: {
+    id: number;
+    username: string;
+  };
+  shared_with: Array<{
+    id: number;
+    username: string;
+  }>;
 }
 
 const tableData = [

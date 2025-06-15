@@ -1,7 +1,17 @@
 import { TableDataType } from "@/data/table";
 export type TableDataAction =
   | { type: "EDIT"; payload: { id: number; table_name: string } }
-  | { type: "SHARE"; payload: { id: number } } // Even if not used yet, add payload for future consistency
+  | {
+      type: "SHARE";
+      payload: {
+        id: number;
+        is_shared: boolean;
+        shared_with: Array<{
+          id: number;
+          username: string;
+        }>;
+      };
+    }
   | { type: "DELETE"; payload: { id: number } }
   | { type: "SET_TABLES"; payload: TableDataType[] }
   | {
@@ -20,8 +30,8 @@ export const TableReducer = (
 ): TableDataType[] => {
   switch (action.type) {
     case "SET_TABLES": {
-      console.log("at tablereducer set table: ",action.payload);
-      
+      console.log("at tablereducer set table: ", action.payload);
+
       return [...action.payload.data];
     }
     case "ADD_TABLE": {
@@ -60,8 +70,16 @@ export const TableReducer = (
     }
 
     case "SHARE": {
-      console.log("Share logic will implement later.");
-      return [...tables]; // Return unchanged state
+      return tables.map((table) =>
+        table.id === action.payload.id
+          ? {
+              ...table,
+              is_shared: action.payload.is_shared,
+              shared_with: action.payload.shared_with,
+              modified_at: new Date().toISOString(),
+            }
+          : table
+      );
     }
 
     case "DELETE": {

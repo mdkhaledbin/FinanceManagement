@@ -2,12 +2,15 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import { SlOptionsVertical } from "react-icons/sl";
+import { IoShareOutline } from "react-icons/io5";
+import { BsShareFill } from "react-icons/bs";
 import { TableDataType } from "@/data/table";
 import { useTheme } from "@/context/ThemeProvider";
 import { createPortal } from "react-dom";
 import { useSelectedTable } from "@/context/SelectedTableProvider";
 import { tableApi } from "@/api/TableDataApi";
 import { getFriendsList } from "@/api/AuthApi";
+import { useTablesData } from "@/context/DataProviderReal";
 
 interface Friend {
   id: number;
@@ -28,6 +31,8 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
 }) => {
   const { theme } = useTheme();
   const { selectedTable, setSelectedTable } = useSelectedTable();
+  const { dispatchTablesData } = useTablesData();
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(table.table_name);
@@ -41,6 +46,14 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
   const [selectedFriends, setSelectedFriends] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setCurrentUserId(user.id);
+    }
+  }, []);
 
   const handleSelectTable = (tableId: number | null) => {
     console.log("SideBarEntries - Table ID:", tableId);
@@ -143,7 +156,15 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         action: "share",
       });
 
-      if (response.success) {
+      if (response.success && response.data?.table) {
+        dispatchTablesData({
+          type: "SHARE",
+          payload: {
+            id: table.id,
+            is_shared: response.data.table.is_shared,
+            shared_with: response.data.table.shared_with,
+          },
+        });
         setShowFriendsDropdown(false);
         setShowDropDown(false);
       } else {
@@ -167,7 +188,15 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         action: "unshare",
       });
 
-      if (response.success) {
+      if (response.success && response.data?.table) {
+        dispatchTablesData({
+          type: "SHARE",
+          payload: {
+            id: table.id,
+            is_shared: response.data.table.is_shared,
+            shared_with: response.data.table.shared_with,
+          },
+        });
         setShowFriendsDropdown(false);
         setShowDropDown(false);
         if (selectedTable === table.id) handleSelectTable(null);
@@ -266,7 +295,36 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
             } transition-colors duration-500 ease-in-out flex items-center
             w-[90%]`}
           >
-            <p className="inline-flex items-center">
+            <p className="inline-flex flex-col">
+              {table.is_shared && (
+                <span
+                  className={`text-[10px] sm:text-xs mb-0.5 flex items-center gap-1 ${
+                    theme === "dark" ? "text-gray-400" : "text-gray-500"
+                  }`}
+                >
+                  {currentUserId === table.owner.id ? (
+                    <>
+                      <IoShareOutline
+                        className={`${
+                          theme === "dark"
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                        }`}
+                      />
+                      Shared
+                    </>
+                  ) : (
+                    <>
+                      <BsShareFill
+                        className={`${
+                          theme === "dark" ? "text-blue-400" : "text-blue-600"
+                        }`}
+                      />
+                      Shared from {table.owner.username}
+                    </>
+                  )}
+                </span>
+              )}
               <span
                 className={`font-semibold tracking-wide ${
                   theme === "dark"
@@ -276,56 +334,36 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
               >
                 {table.table_name}
               </span>
-              {selectedTable && selectedTable === table.id && table.id > 0 && (
-                <span className="ml-1 sm:ml-2 inline-flex items-center">
-                  <span
-                    className={`relative inline-flex h-1.5 w-1.5 sm:h-2 sm:w-2 ${
-                      theme === "dark" ? "bg-amber-400" : "bg-amber-500"
-                    } rounded-full`}
-                  >
-                    <span
-                      className={`absolute inline-flex h-full w-full rounded-full ${
-                        theme === "dark" ? "bg-amber-400/80" : "bg-amber-500/80"
-                      } animate-ping`}
-                    />
-                  </span>
-                  <span
-                    className={`ml-0.5 sm:ml-1 text-xs ${
-                      theme === "dark" ? "text-amber-300" : "text-amber-700"
-                    }`}
-                  >
-                    on
-                  </span>
-                </span>
-              )}
             </p>
           </h3>
         )}
         <div className="relative">
-          <button
-            ref={buttonRef}
-            onClick={(e) => {
-              handleDropdownToggle(e);
-            }}
-            className={`p-0.5 sm:p-1 rounded-md sm:rounded-lg transition-all duration-500 ease-in-out ${
-              selectedTable === table.id
-                ? "opacity-100"
-                : "opacity-0 group-hover:opacity-100"
-            } 
-            ${
-              theme === "dark"
-                ? "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-            }
-            transform ${
-              selectedTable === table.id
-                ? "translate-x-0"
-                : "translate-x-1 group-hover:translate-x-0"
-            }
-            backdrop-blur-sm`}
-          >
-            <SlOptionsVertical size={12} className="sm:w-3.5 sm:h-3.5" />
-          </button>
+          {currentUserId === table.owner.id && (
+            <button
+              ref={buttonRef}
+              onClick={(e) => {
+                handleDropdownToggle(e);
+              }}
+              className={`p-0.5 sm:p-1 rounded-md sm:rounded-lg transition-all duration-500 ease-in-out ${
+                selectedTable === table.id
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100"
+              } 
+              ${
+                theme === "dark"
+                  ? "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+              }
+              transform ${
+                selectedTable === table.id
+                  ? "translate-x-0"
+                  : "translate-x-1 group-hover:translate-x-0"
+              }
+              backdrop-blur-sm`}
+            >
+              <SlOptionsVertical size={12} className="sm:w-3.5 sm:h-3.5" />
+            </button>
+          )}
 
           {showDropDown &&
             createPortal(

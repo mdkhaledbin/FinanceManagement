@@ -47,6 +47,22 @@ interface ShareTablePayload {
   action: "share" | "unshare";
 }
 
+interface ShareTableResponse {
+  success: boolean;
+  data?: {
+    table: {
+      id: number;
+      table_name: string;
+      is_shared: boolean;
+      shared_with: Array<{
+        id: number;
+        username: string;
+      }>;
+    };
+  };
+  error?: string;
+}
+
 // Create axios instance with base configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -283,8 +299,8 @@ export const tableApi = {
   // Share a table with friends
   async shareTable(
     payload: ShareTablePayload
-  ): Promise<ApiResponse<{ success: boolean }>> {
-    return apiRequest<{ success: boolean }>(
+  ): Promise<ApiResponse<ShareTableResponse>> {
+    return apiRequest<ShareTableResponse>(
       "/main/share-table/",
       "POST",
       payload

@@ -16,7 +16,7 @@ from .serializers import DynamicTableSerializer
 
 class DynamicTableListView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticatedCustom] 
+    permission_classes = [IsAuthenticatedCustom]
 
     def get(self, request):
         try:
@@ -25,37 +25,27 @@ class DynamicTableListView(APIView):
                 return Response({'message': "Refresh token not provided."}, status=status.HTTP_401_UNAUTHORIZED)
             
             user_id = decode_refresh_token(refresh_token)
-            user = User.objects.get(id=user_id)
+            current_user = User.objects.get(id=user_id)
             
-            if not user.is_authenticated:
-                return Response({
-                    "message": "Authentication credentials were not provided or are invalid."
-                }, status=status.HTTP_401_UNAUTHORIZED)
-
-            # Get user's own tables
-            own_tables = DynamicTableData.objects.filter(user=user)
+            # Get tables owned by the user
+            owned_tables = DynamicTableData.objects.filter(user=current_user).distinct()
             
             # Get tables shared with the user
-            shared_tables = DynamicTableData.objects.filter(shared_with=user)
+            shared_tables = DynamicTableData.objects.filter(shared_with=current_user).distinct()
             
             # Combine both querysets
-            all_tables = own_tables | shared_tables
+            all_tables = owned_tables.union(shared_tables)
             
-            if not all_tables.exists():
-                return Response({
-                    "message": "No dynamic tables found for the current user.",
-                    "data": []
-                }, status=status.HTTP_200_OK)
-
+            # Serialize the tables
             serializer = DynamicTableSerializer(all_tables, many=True)
+            
             return Response({
                 "message": "Dynamic tables fetched successfully.",
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
-
+            
         except Exception as e:
             return Response({
-                "message": "An unexpected error occurred while fetching data.",
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
@@ -557,6 +547,7 @@ class ShareTableView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
             try:
+                # Get the original table
                 table = DynamicTableData.objects.get(id=table_id, user=current_user)
             except DynamicTableData.DoesNotExist:
                 return Response({
@@ -569,16 +560,38 @@ class ShareTableView(APIView):
                         "error": "friend_ids are required for sharing."
                     }, status=status.HTTP_400_BAD_REQUEST)
                     
+                # Get all friends to share with
+                friends_to_share = []
+                
+                # Get friends from both directions (same as FriendsListView)
+                user_friends = current_user.profile.friends.all()
+                friends_who_added_me = User.objects.filter(profile__friends=current_user)
+                all_friends = user_friends.union(friends_who_added_me)
+                
                 for friend_id in friend_ids:
                     try:
                         friend = User.objects.get(id=friend_id)
-                        if friend in current_user.profile.friends.all():
-                            table.shared_with.add(friend)
+                        # Check if friend is in the combined friends list
+                        if friend in all_friends:
+                            # Check if table is already shared with this friend
+                            if not table.shared_with.filter(id=friend.id).exists():
+                                friends_to_share.append(friend)
+                        else:
+                            return Response({
+                                "error": f"{friend.username} is not your friend."
+                            }, status=status.HTTP_403_FORBIDDEN)
                     except User.DoesNotExist:
                         continue
-                        
-                table.is_shared = True
-                table.save()
+                
+                # Add all friends at once to prevent multiple saves
+                if friends_to_share:
+                    # Use bulk_create to prevent duplicate entries
+                    table.shared_with.add(*friends_to_share)
+                    # Only update is_shared if it's not already True
+                    if not table.is_shared:
+                        table.is_shared = True
+                        table.save()
+                
                 message = "Table shared successfully."
                 
             elif action == 'unshare':
@@ -586,12 +599,9 @@ class ShareTableView(APIView):
                     # Unshare with all friends
                     table.shared_with.clear()
                 else:
-                    for friend_id in friend_ids:
-                        try:
-                            friend = User.objects.get(id=friend_id)
-                            table.shared_with.remove(friend)
-                        except User.DoesNotExist:
-                            continue
+                    # Remove all specified friends at once
+                    friends_to_remove = User.objects.filter(id__in=friend_ids)
+                    table.shared_with.remove(*friends_to_remove)
                             
                 if not table.shared_with.exists():
                     table.is_shared = False
@@ -605,7 +615,13 @@ class ShareTableView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
             return Response({
-                "message": message
+                "message": message,
+                "table": {
+                    "id": table.id,
+                    "table_name": table.table_name,
+                    "is_shared": table.is_shared,
+                    "shared_with": [{"id": f.id, "username": f.username} for f in table.shared_with.all()]
+                }
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
