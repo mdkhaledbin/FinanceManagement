@@ -6,6 +6,7 @@ import { TableRow, JsonTableItem } from "@/data/TableContent";
 import { useTheme } from "@/context/ThemeProvider";
 import { handleJsonTableOperation } from "@/api/TableContentApi";
 import { jsonTableApi } from "@/api/TableContentApi";
+import EmptyTableState from "./EmptyTableState";
 
 // Simple icon components for demonstration
 type IconProps = {
@@ -692,11 +693,7 @@ const ShowTable = () => {
   };
 
   if (TableContent.length === 0) {
-    return (
-      <p className="text-gray-500 pt-[5vh] lg:pt-[1vh]">
-        No table selected or table has no data.
-      </p>
-    );
+    return <EmptyTableState />;
   }
 
   const { headers, rows } = TableContent[0].data;
@@ -938,7 +935,7 @@ const ShowTable = () => {
 
           {/* Premium Status Bar */}
           <div
-            className={`absolute bottom-0 left-0 right-0 backdrop-blur-lg px-5 py-3 text-xs border-t flex justify-between items-center z-50
+            className={`fixed bottom-0 left-0 right-0 backdrop-blur-lg px-5 py-3 text-xs border-t flex justify-between items-center z-50
               ${
                 theme === "dark"
                   ? "bg-gray-900/80 border-gray-700 text-gray-400 shadow-lg"

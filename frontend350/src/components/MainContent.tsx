@@ -2,11 +2,9 @@ import React from "react";
 import ChatArea from "./chat/ChatAreaReal"; //use ChatAreaReal after integration of Api
 import ShowTable from "./MainComponents/ShowTable";
 import { useTheme } from "@/context/ThemeProvider";
-import { useSelectedTable } from "@/context/SelectedTableProvider";
 
 const MainContent = ({ showChat }: { showChat: boolean }) => {
   const { theme } = useTheme();
-  const { selectedTable } = useSelectedTable();
 
   return (
     <div
@@ -30,7 +28,7 @@ const MainContent = ({ showChat }: { showChat: boolean }) => {
               showChat ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-            {selectedTable && <ShowTable />}
+            <ShowTable />
           </div>
         </div>
       </div>
