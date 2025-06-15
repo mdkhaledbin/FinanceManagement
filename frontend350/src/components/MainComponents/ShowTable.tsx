@@ -765,7 +765,7 @@ const ShowTable = () => {
           {/* Luxurious Table with Enhanced Styling */}
           <table
             ref={tableRef}
-            className="min-w-full border-collapse table-fixed text-sm font-sans overflow-x-auto"
+            className="min-w-full border-collapse table-fixed text-sm font-sans overflow-x-auto mb-10"
             onKeyDown={handleKeyDown}
           >
             <thead className="sticky top-16 z-10">
