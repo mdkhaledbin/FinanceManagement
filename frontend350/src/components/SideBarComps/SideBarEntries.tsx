@@ -69,6 +69,17 @@ const SideBarEntries: React.FC<SideBarEntriesProps> = ({
         !dropdownRef.current.contains(event.target as Node) &&
         buttonRef.current &&
         !buttonRef.current.contains(event.target as Node) &&
+        !friendsDropdownRef.current
+      ) {
+        setShowDropDown(false);
+        setShowFriendsDropdown(false);
+        setIsEditing(false);
+      }
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node) &&
         friendsDropdownRef.current &&
         !friendsDropdownRef.current.contains(event.target as Node)
       ) {
