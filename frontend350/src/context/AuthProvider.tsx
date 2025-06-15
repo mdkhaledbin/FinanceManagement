@@ -48,7 +48,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshUser = useCallback(async () => {
     const existingUser = localStorage.getItem("user");
-    if (!existingUser && window.location.pathname !== "/signin") {
+    if (!existingUser) {
       setLoading(false);
       return;
     }
