@@ -9,24 +9,33 @@ import {
   FiMoon,
   FiSettings,
   FiUsers,
+  FiMessageSquare,
+  FiLogOut,
 } from "react-icons/fi";
 import clsx from "clsx";
 
 import { useRouter, usePathname } from "next/navigation";
 import SettingsModal from "@/components/SettingsModal";
+import { useUser } from "@/context/AuthProvider";
 
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
   const pathname = usePathname();
+  const { signOut } = useUser();
 
   useEffect(() => {
     // Check if user is logged in
-    const user = localStorage.getItem("user");
-    setIsLoggedIn(!!user);
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      setUser(JSON.parse(userData));
+      setIsLoggedIn(true);
+    }
   }, []);
 
   const toggleMobileMenu = () => {
@@ -56,6 +65,15 @@ const Navbar = () => {
     if (pathname !== "/") {
       router.push("/");
     }
+  };
+
+  const handleSignOut = () => {
+    signOut();
+    setShowUserMenu(false);
+    localStorage.removeItem("user");
+    setIsLoggedIn(false);
+    setShowUserMenu(false);
+    router.push("/");
   };
 
   const linkStyle = clsx(
@@ -90,59 +108,149 @@ const Navbar = () => {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-6">
-            <a href="#features" className={linkStyle}>
-              Features
-            </a>
-            <a href="#why-us" className={linkStyle}>
-              Why Us
-            </a>
+            {!isLoggedIn ? (
+              <>
+                <a href="#features" className={linkStyle}>
+                  Features
+                </a>
+                <a href="#why-us" className={linkStyle}>
+                  Why Us
+                </a>
+                <button
+                  onClick={() => router.push("/signin")}
+                  className={clsx(
+                    "px-6 py-2 rounded-md transition-colors font-medium",
+                    "bg-blue-600 text-white hover:bg-blue-700"
+                  )}
+                >
+                  Sign In
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Friends Link */}
+                {pathname !== "/users" && (
+                  <button
+                    onClick={handleFriendsClick}
+                    className={clsx("flex items-center space-x-1", linkStyle)}
+                  >
+                    <FiUsers size={18} />
+                    <span>Friends</span>
+                  </button>
+                )}
 
-            {/* Friends Link - Only show if not on /users route */}
-            {pathname !== "/users" && (
-              <button
-                onClick={handleFriendsClick}
-                className={clsx("flex items-center space-x-1", linkStyle)}
-              >
-                <FiUsers size={18} />
-                <span>Friends</span>
-              </button>
+                {/* Chat Link */}
+                {pathname !== "/chat" && (
+                  <button
+                    onClick={handleChatClick}
+                    className={clsx("flex items-center space-x-1", linkStyle)}
+                  >
+                    <FiMessageSquare size={18} />
+                    <span>Chat</span>
+                  </button>
+                )}
+
+                {/* Theme Toggle */}
+                <button
+                  onClick={toggleTheme}
+                  className={clsx(
+                    "p-2 rounded-full transition-colors",
+                    theme === "dark" ? "text-yellow-400" : "text-blue-600"
+                  )}
+                  aria-label="Toggle Theme"
+                >
+                  {theme === "dark" ? (
+                    <FiSun size={20} />
+                  ) : (
+                    <FiMoon size={20} />
+                  )}
+                </button>
+
+                {/* User Menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className={clsx(
+                      "flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300",
+                      theme === "dark"
+                        ? "bg-gray-800 text-white hover:bg-gray-700"
+                        : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                    )}
+                  >
+                    <span className="font-medium">
+                      {user?.name || user?.username}
+                    </span>
+                  </button>
+
+                  {/* User Dropdown Menu */}
+                  {showUserMenu && (
+                    <div
+                      className={clsx(
+                        "absolute right-0 mt-2 w-48 rounded-lg shadow-lg py-1 z-50",
+                        theme === "dark"
+                          ? "bg-gray-800 border border-gray-700"
+                          : "bg-white border border-gray-200"
+                      )}
+                    >
+                      <button
+                        onClick={() => {
+                          setIsSettingsOpen(true);
+                          setShowUserMenu(false);
+                        }}
+                        className={clsx(
+                          "flex items-center w-full px-4 py-2 text-sm",
+                          theme === "dark"
+                            ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        )}
+                      >
+                        <FiSettings className="mr-3 h-4 w-4" />
+                        Settings
+                      </button>
+
+                      <button
+                        onClick={handleChatClick}
+                        className={clsx(
+                          "flex items-center w-full px-4 py-2 text-sm",
+                          theme === "dark"
+                            ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        )}
+                      >
+                        <FiMessageSquare className="mr-3 h-4 w-4" />
+                        Chat
+                      </button>
+
+                      <button
+                        onClick={handleFriendsClick}
+                        className={clsx(
+                          "flex items-center w-full px-4 py-2 text-sm",
+                          theme === "dark"
+                            ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        )}
+                      >
+                        <FiUsers className="mr-3 h-4 w-4" />
+                        Friends
+                      </button>
+
+                      <button
+                        onClick={handleSignOut}
+                        className={clsx(
+                          "flex items-center w-full px-4 py-2 text-sm",
+                          theme === "dark"
+                            ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            : "text-gray-700 hover:bg-gray-100"
+                        )}
+                      >
+                        <FiLogOut className="mr-3 h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className={clsx(
-                "p-2 rounded-full transition-colors",
-                theme === "dark" ? "text-yellow-400" : "text-blue-600"
-              )}
-              aria-label="Toggle Theme"
-            >
-              {theme === "dark" ? <FiSun size={20} /> : <FiMoon size={20} />}
-            </button>
-
-            {/* Settings Button */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={clsx(
-                "p-2 rounded-full transition-colors",
-                theme === "dark"
-                  ? "text-gray-300 hover:text-white"
-                  : "text-gray-600 hover:text-blue-600"
-              )}
-              aria-label="User Settings"
-            >
-              <FiSettings size={20} />
-            </button>
-
-            <button
-              onClick={handleChatClick}
-              className={clsx(
-                "px-6 py-2 rounded-md transition-colors font-medium",
-                "bg-blue-600 text-white hover:bg-blue-700"
-              )}
-            >
-              MY EXPENSES
-            </button>
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -159,19 +267,92 @@ const Navbar = () => {
               {theme === "dark" ? <FiSun size={20} /> : <FiMoon size={20} />}
             </button>
 
-            {/* Settings Button (Mobile) */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={clsx(
-                "p-2 rounded-full transition-colors",
-                theme === "dark"
-                  ? "text-gray-300 hover:text-white"
-                  : "text-gray-600 hover:text-blue-600"
-              )}
-              aria-label="User Settings"
-            >
-              <FiSettings size={20} />
-            </button>
+            {/* User Menu for Mobile */}
+            {isLoggedIn && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className={clsx(
+                    "flex items-center space-x-2 px-3 py-2 rounded-lg",
+                    theme === "dark"
+                      ? "bg-gray-800 text-white"
+                      : "bg-gray-100 text-gray-900"
+                  )}
+                >
+                  <span className="font-medium">
+                    {user?.name || user?.username}
+                  </span>
+                </button>
+
+                {/* Mobile User Dropdown Menu */}
+                {showUserMenu && (
+                  <div
+                    className={clsx(
+                      "absolute right-0 mt-2 w-48 rounded-lg shadow-lg py-1 z-50",
+                      theme === "dark"
+                        ? "bg-gray-800 border border-gray-700"
+                        : "bg-white border border-gray-200"
+                    )}
+                  >
+                    {/* Same dropdown menu items as desktop */}
+                    <button
+                      onClick={() => {
+                        setIsSettingsOpen(true);
+                        setShowUserMenu(false);
+                      }}
+                      className={clsx(
+                        "flex items-center w-full px-4 py-2 text-sm",
+                        theme === "dark"
+                          ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      <FiSettings className="mr-3 h-4 w-4" />
+                      Settings
+                    </button>
+
+                    <button
+                      onClick={handleChatClick}
+                      className={clsx(
+                        "flex items-center w-full px-4 py-2 text-sm",
+                        theme === "dark"
+                          ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      <FiMessageSquare className="mr-3 h-4 w-4" />
+                      Chat
+                    </button>
+
+                    <button
+                      onClick={handleFriendsClick}
+                      className={clsx(
+                        "flex items-center w-full px-4 py-2 text-sm",
+                        theme === "dark"
+                          ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      <FiUsers className="mr-3 h-4 w-4" />
+                      Friends
+                    </button>
+
+                    <button
+                      onClick={handleSignOut}
+                      className={clsx(
+                        "flex items-center w-full px-4 py-2 text-sm",
+                        theme === "dark"
+                          ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      <FiLogOut className="mr-3 h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               onClick={toggleMobileMenu}
@@ -199,31 +380,49 @@ const Navbar = () => {
               : "bg-white text-gray-700"
           )}
         >
-          <a href="#features" className="block py-2 border-b border-gray-200">
-            Features
-          </a>
-          <a href="#why-us" className="block py-2 border-b border-gray-200">
-            Why Us
-          </a>
-          {/* Friends Link - Only show if not on /users route */}
-          {pathname !== "/users" && (
-            <button
-              onClick={handleFriendsClick}
-              className="flex items-center space-x-2 py-2 border-b border-gray-200 w-full text-left"
-            >
-              <FiUsers size={18} />
-              <span>Friends</span>
-            </button>
+          {!isLoggedIn ? (
+            <>
+              <a
+                href="#features"
+                className="block py-2 border-b border-gray-200"
+              >
+                Features
+              </a>
+              <a href="#why-us" className="block py-2 border-b border-gray-200">
+                Why Us
+              </a>
+              <button
+                onClick={() => router.push("/signin")}
+                className={clsx(
+                  "block w-full text-center px-4 py-2 rounded-md font-medium mt-2",
+                  "bg-blue-600 text-white hover:bg-blue-700"
+                )}
+              >
+                Sign In
+              </button>
+            </>
+          ) : (
+            <>
+              {pathname !== "/users" && (
+                <button
+                  onClick={handleFriendsClick}
+                  className="flex items-center space-x-2 py-2 border-b border-gray-200 w-full text-left"
+                >
+                  <FiUsers size={18} />
+                  <span>Friends</span>
+                </button>
+              )}
+              {pathname !== "/chat" && (
+                <button
+                  onClick={handleChatClick}
+                  className="flex items-center space-x-2 py-2 border-b border-gray-200 w-full text-left"
+                >
+                  <FiMessageSquare size={18} />
+                  <span>Chat</span>
+                </button>
+              )}
+            </>
           )}
-          <button
-            onClick={handleChatClick}
-            className={clsx(
-              "block w-full text-center px-4 py-2 rounded-md font-medium mt-2",
-              "bg-blue-600 text-white hover:bg-blue-700"
-            )}
-          >
-            MY EXPENSES
-          </button>
         </div>
       )}
 
