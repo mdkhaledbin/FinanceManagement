@@ -16,6 +16,6 @@ environ.Env.read_env()  # Reads from .env file
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_backend.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_backend.settings.production')
 
 application = get_asgi_application()
