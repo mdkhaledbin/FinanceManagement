@@ -10,6 +10,7 @@ import {
   HiUser,
   HiCog,
   HiUserGroup,
+  HiChat,
 } from "react-icons/hi";
 import { useTheme } from "@/context/ThemeProvider";
 import { useUser } from "@/context/AuthProvider";
@@ -37,6 +38,10 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
 
   const handleFriendsClick = () => {
     router.push("/users");
+  };
+
+  const handleChatClick = () => {
+    router.push("/chat");
   };
 
   return (
@@ -121,6 +126,24 @@ const Navbar = ({ isOpen, setIsOpen }: SideBarProps) => {
         )}
 
         <div className="flex items-center space-x-2 md:space-x-4">
+          {/* Chat Button */}
+          {pathname !== "/chat" && (
+            <button
+              onClick={handleChatClick}
+              className={`p-2 rounded-full transition-all duration-500 ease-in-out ${
+                theme === "dark"
+                  ? "bg-gray-700/80 text-white hover:bg-gray-600 hover:scale-110"
+                  : "bg-gray-100/80 text-gray-900 hover:bg-gray-200 hover:scale-110"
+              } shadow-lg flex items-center justify-center`}
+              aria-label="Chat"
+            >
+              <HiChat
+                size={20}
+                className="transition-all duration-500 ease-in-out hover:rotate-12"
+              />
+            </button>
+          )}
+
           {/* Friends Button */}
           {pathname !== "/users" && (
             <button
