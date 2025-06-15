@@ -269,13 +269,35 @@ class FriendsListView(APIView):
             user_friends = user.profile.friends.all()
             friends_who_added_me = User.objects.filter(profile__friends=user)
             
-            # Combine both querysets and remove duplicates
-            all_friends = user_friends.union(friends_who_added_me)
+            # Create a list of friends with additional info
+            friends_list = []
             
-            serializer = UserSerializer(all_friends, many=True)
+            # Add friends that user added
+            for friend in user_friends:
+                friends_list.append({
+                    'id': friend.id,
+                    'username': friend.username,
+                    'email': friend.email,
+                    'first_name': friend.first_name,
+                    'last_name': friend.last_name,
+                    'added_by_me': True
+                })
+            
+            # Add friends who added the user
+            for friend in friends_who_added_me:
+                if not any(f['id'] == friend.id for f in friends_list):
+                    friends_list.append({
+                        'id': friend.id,
+                        'username': friend.username,
+                        'email': friend.email,
+                        'first_name': friend.first_name,
+                        'last_name': friend.last_name,
+                        'added_by_me': False
+                    })
+            
             return Response({
                 "message": "Friends list fetched successfully",
-                "data": serializer.data
+                "data": friends_list
             }, status=status.HTTP_200_OK)
         except Exception as e:
             print(f"Error in FriendsListView: {str(e)}")  # Add logging
@@ -318,17 +340,19 @@ class ManageFriendView(APIView):
                 friend.refresh_from_db()  # Refresh friend object to get the new profile
 
             if action == 'add':
-                if friend in user.profile.friends.all():
+                # Check if already friends (either direction)
+                if friend in user.profile.friends.all() or user in friend.profile.friends.all():
                     return Response({
-                        "error": "User is already your friend"
+                        "error": "Already friends"
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 user.profile.friends.add(friend)
                 message = "Friend added successfully"
             elif action == 'remove':
+                # Check if the friend was added by the user
                 if friend not in user.profile.friends.all():
                     return Response({
-                        "error": "User is not your friend"
+                        "error": "Cannot remove friend who added you"
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 user.profile.friends.remove(friend)
