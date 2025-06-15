@@ -4,6 +4,15 @@ import { useTheme } from "@/context/ThemeProvider";
 import clsx from "clsx";
 import Image from "next/image";
 
+const images = [
+  "unsplash_1.JPG",
+  "unsplash_2.JPG",
+  "unsplash_3.JPG",
+  "unsplash_4.JPG",
+  "unsplash_5.JPG",
+  "unsplash_6.JPG"
+];
+
 const primaryButtonStyleLight =
   "bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg";
 const primaryButtonStyleDark =
@@ -11,22 +20,11 @@ const primaryButtonStyleDark =
 
 export default function Hero() {
   const { theme } = useTheme();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>("");
 
   useEffect(() => {
-    const fetchImage = async () => {
-      try {
-        const res = await fetch(
-          "https://api.unsplash.com/photos/random?query=finance,money,transaction,bank&client_id=x9qDOaEYBlQkYuMWMg9UXQ-Lxm-242FO6qJFtXW1-M8"
-        );
-        const data = await res.json();
-        setImageUrl(data.urls.regular);
-      } catch (err) {
-        console.error("Failed to fetch image from Unsplash:", err);
-      }
-    };
-
-    fetchImage();
+    const randomIndex = Math.floor(Math.random() * images.length);
+    setImageUrl(`/${images[randomIndex]}`); // ✅ Prefix with '/' for public folder
   }, []);
 
   return (
@@ -48,8 +46,7 @@ export default function Hero() {
           >
             Manage Any Data with
             <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {" "}
-              Voice & AI
+              {" "}Voice & AI
             </span>
           </h1>
           <p
@@ -75,8 +72,7 @@ export default function Hero() {
                 theme === "dark" ? "text-blue-300" : "text-blue-700"
               )}
             >
-              🎤 "আমি আজকে ১০০ টাকা খরচ করেছি" → Instantly added to your expense
-              table
+              🎤 "আমি আজকে ১০০ টাকা খরচ করেছি" → Instantly added to your expense table
             </p>
             <p
               className={clsx(
@@ -84,8 +80,7 @@ export default function Hero() {
                 theme === "dark" ? "text-gray-400" : "text-gray-600"
               )}
             >
-              Reduces manual work by <strong>80%+</strong> through voice and AI
-              automation
+              Reduces manual work by <strong>80%+</strong> through voice and AI automation
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -120,7 +115,7 @@ export default function Hero() {
               width={500}
               height={400}
               className="rounded-xl shadow-2xl transform transition-transform duration-500 hover:scale-105"
-              unoptimized
+              unoptimized // ✅ Correctly used inside the tag
             />
           )}
         </div>
