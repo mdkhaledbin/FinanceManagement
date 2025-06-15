@@ -25,7 +25,7 @@ const features = [
   },
   {
     icon: MessageSquare,
-    title: "Natural Language Chat",
+    title: "Natural Language Cha",
     description:
       'Chat with your data using everyday language. "Show me expenses from last week" or "আমার গত মাসের খরচ দেখাও" - both work perfectly.',
   },
@@ -52,14 +52,12 @@ const features = [
 const Features = () => {
   const { theme } = useTheme();
 
-  const isDark = theme === "dark";
-
   return (
     <section
       id="features"
       className={clsx(
         "py-16 md:py-24 transition-colors duration-300",
-        isDark ? "bg-gray-800" : "bg-white"
+        theme === "dark" ? "bg-gray-800" : "bg-white"
       )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -67,7 +65,7 @@ const Features = () => {
           <h2
             className={clsx(
               "text-3xl md:text-4xl font-bold mb-4",
-              isDark ? "text-white" : "text-gray-900"
+              theme === "dark" ? "text-white" : "text-gray-900"
             )}
           >
             Revolutionary Features
@@ -75,7 +73,7 @@ const Features = () => {
           <p
             className={clsx(
               "text-lg max-w-3xl mx-auto",
-              isDark ? "text-gray-300" : "text-gray-600"
+              theme === "dark" ? "text-gray-300" : "text-gray-600"
             )}
           >
             Experience the next generation of data management with voice AI,
@@ -83,40 +81,39 @@ const Features = () => {
             manual work by 80%.
           </p>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map(({ icon: Icon, title, description }) => (
+          {features.map((feature) => (
             <div
-              key={title}
+              key={feature.title}
               className={clsx(
                 "p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col items-start text-left border",
-                isDark
+                theme === "dark"
                   ? "bg-gray-700 border-gray-600 hover:border-blue-500"
                   : "bg-gray-50 border-gray-200 hover:border-blue-300"
               )}
             >
-              <Icon
+              <feature.icon
                 className={clsx(
                   "w-10 h-10 mb-4",
-                  isDark ? "text-blue-400" : "text-blue-600"
+                  theme === "dark" ? "text-blue-400" : "text-blue-600"
                 )}
                 strokeWidth={1.5}
               />
               <h3
                 className={clsx(
                   "text-xl font-semibold mb-3",
-                  isDark ? "text-gray-100" : "text-gray-800"
+                  theme === "dark" ? "text-gray-100" : "text-gray-800"
                 )}
               >
-                {title}
+                {feature.title}
               </h3>
               <p
                 className={clsx(
                   "leading-relaxed text-sm",
-                  isDark ? "text-gray-400" : "text-gray-600"
+                  theme === "dark" ? "text-gray-400" : "text-gray-600"
                 )}
               >
-                {description}
+                {feature.description}
               </p>
             </div>
           ))}
